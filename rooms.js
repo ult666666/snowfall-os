@@ -1,10 +1,20 @@
 /* A folder's stable identifier ties its cottage, notebook and timer together across renames. */
 (() => {
   'use strict';
+  // Each stop is a painted parcel on the street, numbered back to front in village-plan.json.
   const samples = [
-    {id:'sample-sketchbook', name:'Sketchbook', variant:1},
-    {id:'sample-studio', name:'Studio', variant:3},
-    {id:'sample-library', name:'Library', variant:5},
+    {id:'sample-map-room', name:'Maps', variant:4, street:0, lot:0},
+    {id:'sample-greenhouse', name:'Greenhouse', variant:3, street:0, lot:3},
+    {id:'sample-observatory', name:'Observatory', variant:2, street:0, lot:5},
+    {id:'sample-sketchbook', name:'Sketchbook', variant:1, street:1, lot:1},
+    {id:'sample-letters', name:'Letters', variant:5, street:1, lot:3},
+    {id:'sample-music', name:'Music Room', variant:6, street:1, lot:4},
+    {id:'sample-studio', name:'Studio', variant:3, street:2, lot:0},
+    {id:'sample-workshop', name:'Workshop', variant:4, street:2, lot:2},
+    {id:'sample-photographs', name:'Photographs', variant:1, street:2, lot:5},
+    {id:'sample-boathouse', name:'Boathouse', variant:6, street:3, lot:0},
+    {id:'sample-library', name:'Library', variant:5, street:3, lot:3},
+    {id:'sample-journal', name:'Journal', variant:2, street:3, lot:4},
   ];
   const widgets = [
     {kind:'notes',name:'Notebook'},
@@ -44,7 +54,7 @@
     node.addEventListener('click',click);
     return node;
   }
-  const imgPath = variant => 'assets/houses/cottage-'+variant+'.png?v=4.1.0';
+  const imgPath = variant => 'assets/houses/cottage-'+variant+'.png?v=5.0.0';
   function art(house) {
     const node=el('img','room-cottage');
     node.alt=''; node.draggable=false; node.src=imgPath(house.variant);
@@ -200,5 +210,5 @@
     mounts.set(host,cleanup);
     return cleanup;
   }
-  window.SnowRooms=Object.freeze({mount});
+  window.SnowRooms=Object.freeze({mount,samples});
 })();

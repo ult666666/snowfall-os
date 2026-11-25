@@ -1,0 +1,40 @@
+#postal-counter { position:absolute; z-index:3; pointer-events:none; }
+.counter-door { display:none; position:absolute; inset:0; border:0; padding:0; background:transparent; }
+html[data-surface="preview"] .counter-door { display:block; pointer-events:auto; }
+.counter-mail { position:absolute; top:67%; left:13.5%; width:31%; height:24%; padding:0; border:0; background:none;
+  display:grid; place-items:center; pointer-events:auto; }
+.counter-mail + .counter-mail { left:57.5%; }
+.counter-mail .postal-paper { width:69%; height:58%; transform:rotate(-7deg); transition:transform .18s ease; }
+.counter-mail + .counter-mail .postal-paper { transform:rotate(8deg); }
+.counter-mail:hover .postal-paper, .counter-mail:focus-visible .postal-paper { transform:translateY(-2px) rotate(-1deg); }
+.postal-paper { position:relative; display:inline-block; overflow:hidden; border:1px solid #836648; border-radius:2px 3px 2px 1px;
+  box-shadow:0 2px 1px #73645459, inset 0 1px 0 #fff1; background-color:#f3d9a7; }
+.postal-paper.letter { background:linear-gradient(30deg,transparent 46%,#b9916a 48%,#f0d6ac 52%,transparent 54%) left top/51% 72% no-repeat,
+  linear-gradient(-30deg,transparent 46%,#b9916a 48%,#f0d6ac 52%,transparent 54%) right top/51% 72% no-repeat,#f2dcb1; }
+.postal-paper.letter::after { content:''; position:absolute; top:16%; right:11%; width:18%; height:35%; background:#b46e54; border:1px dotted #fae3ba; }
+.postal-paper.picture { background:linear-gradient(145deg,transparent 52%,#738f86 53% 60%,transparent 61%) 0 0/68% 100%,
+  linear-gradient(38deg,#879d92 44%,transparent 45%),linear-gradient(#8cb3c4,#f8debd); border:2px solid #f3e1bd; outline:1px solid #93795c; }
+.postal-paper.parcel { background:linear-gradient(90deg,transparent 45%,#866c50 46% 50%,transparent 51%),
+  linear-gradient(4deg,transparent 47%,#8e714f 48% 52%,transparent 53%),#c49c67; }
+.counter-mail span { display:none; position:absolute; bottom:97%; text-align:center; min-width:70px; width:max-content; max-width:160px;
+  padding:3px 7px; border-radius:3px; background:#f8ead1; color:#493c2f; font:600 11px/1.3 system-ui; overflow-wrap:anywhere; }
+.counter-mail:hover span,.counter-mail:focus-visible span { display:block; }
+html[data-surface="wallpaper"] .counter-mail { pointer-events:none; }
+.yard-active #postal-counter,.room-mode #postal-counter,.custom-image #postal-counter { display:none; }
+#sorting-desk { padding:0; width:min(400px,90vw); max-height:78vh; overflow:auto; border:1px solid #8c7354;
+  color:#44392d; background:linear-gradient(110deg,#fff3d9,#f1dfbe); border-radius:7px 6px 8px 6px; box-shadow:0 18px 60px #353d4755; }
+#sorting-desk::backdrop { background:#253d4c3d; }
+#sorting-desk header { display:flex; gap:15px; align-items:center; justify-content:space-between; padding:16px 18px 11px; border-bottom:1px solid #b89a726b; }
+#sorting-desk h2 { font:600 1.22rem/1.3 Georgia,serif; margin:0; overflow-wrap:anywhere; }
+#sorting-desk button,#sorting-desk a { color:inherit; }
+#sorting-desk header button { font:1.4rem/1 system-ui; height:28px; width:28px; border:0; background:transparent; }
+.sorting-content { padding:10px 18px 16px; }
+.sorting-list { list-style:none; padding:0; margin:0; }
+.sorting-list button { width:100%; border:0; background:transparent; display:flex; align-items:center; gap:11px; text-align:left; padding:10px 2px; }
+.sorting-list .postal-paper { width:24px; height:16px; flex:none; }
+.sorting-list button:hover { text-decoration:underline; }
+.sorting-letter { font:1.05rem/1.6 Georgia,serif; }
+.sorting-postcard { width:100%; display:block; margin-top:5px; border:4px solid #fffaec; }
+.sorting-content footer { display:flex; gap:20px; margin-top:15px; align-items:center; }
+.sorting-content footer :is(button,a) { border:0; background:transparent; padding:0; font-size:.85rem; text-decoration:underline; }
+@media (prefers-reduced-motion:reduce) { .counter-mail .postal-paper { transition:none; } }

@@ -6,35 +6,38 @@
   <meta name="theme-color" content="#324b65">
   <meta name="description" content="An alpine winter wallpaper for Mac. Watch the snow fall, build a snowman, and send a little plow through fresh powder.">
   <title>Snowfall · Frostpine Hollow</title>
-  <link rel="icon" href="assets/cabin-icon.png?v=4.1.0">
-  <link rel="preload" as="image" href="assets/scene.jpg?v=4.1.0">
-  <link rel="stylesheet" href="desktop.css?v=4.1.0">
-  <link rel="stylesheet" href="apps.css?v=4.1.0">
-  <link rel="stylesheet" href="radio.css?v=4.1.0">
-  <link rel="stylesheet" href="yard.css?v=4.1.0">
-  <script defer src="apps.js?v=4.1.0"></script>
-  <script defer src="radio.js?v=4.1.0"></script>
-  <script defer src="yard.js?v=4.1.0"></script>
-  <link rel="stylesheet" href="rooms.css?v=4.1.0">
-  <script defer src="rooms.js?v=4.1.0"></script>
-  <script defer src="porch.js?v=4.1.0"></script>
-  <script defer src="widget-eaves.js?v=4.1.0"></script>
-  <script defer src="desktop.js?v=4.1.0"></script>
+  <link rel="icon" href="assets/cabin-icon.png?v=5.0.0">
+  <link rel="preload" as="image" href="assets/scene.jpg?v=5.0.0">
+  <link rel="stylesheet" href="desktop.css?v=5.0.0">
+  <link rel="stylesheet" href="apps.css?v=5.0.0">
+  <link rel="stylesheet" href="radio.css?v=5.0.0">
+  <link rel="stylesheet" href="yard.css?v=5.0.0">
+  <script defer src="apps.js?v=5.0.0"></script>
+  <script defer src="radio.js?v=5.0.0"></script>
+  <script defer src="yard.js?v=5.0.0"></script>
+  <link rel="stylesheet" href="rooms.css?v=5.0.0">
+  <link rel="stylesheet" href="post-office.css?v=5.0.0">
+  <script defer src="rooms.js?v=5.0.0"></script>
+  <script defer src="porch.js?v=5.0.0"></script>
+  <script defer src="widget-eaves.js?v=5.0.0"></script>
+  <script defer src="post-office.js?v=5.0.0"></script>
+  <script defer src="desktop.js?v=5.0.0"></script>
 </head>
 <body>
   <main id="scene" aria-label="Frostpine Hollow winter landscape">
-    <img id="wallpaper" src="assets/scene.jpg?v=4.1.0" draggable="false" alt="A painted winter village with snow-capped cottages, a little bakery, and a fox beside a wooden bridge.">
+    <img id="wallpaper" src="assets/scene.jpg?v=5.0.0" draggable="false" alt="A winter valley at sunset. A postal house and clock tower overlook four winding streets, a frozen skating pond and a fox beside the creek.">
     <div id="snow" aria-hidden="true"></div>
     <canvas id="widget-eaves" aria-hidden="true" width="1" height="1"></canvas>
     <div id="wallpaper-cottages" aria-hidden="true"></div>
     <div id="demo-village" aria-label="Village cottages">
-      <button type="button" class="scenery-door" data-scenery="bakery" aria-label="Play snowball catch at the bakery"></button>
-      <button type="button" class="scenery-door" data-scenery="lantern" aria-label="Play snowball catch at the lantern cottage"></button>
-      <button type="button" class="village-house sketchbook" data-sample="sample-sketchbook" aria-label="Play snowball catch at Sketchbook"><img src="assets/houses/cottage-1.png?v=4.1.0" alt=""><span>Sketchbook</span></button>
-      <button type="button" class="village-house studio" data-sample="sample-studio" aria-label="Play snowball catch at Studio"><img src="assets/houses/cottage-3.png?v=4.1.0" alt=""><span>Studio</span></button>
-      <button type="button" class="village-house library" data-sample="sample-library" aria-label="Play snowball catch at Library"><img src="assets/houses/cottage-5.png?v=4.1.0" alt=""><span>Library</span></button>
-      <button type="button" id="village-clock" title="Switch clock format" aria-label="Switch clock format"><span id="village-day"></span><time id="village-time"></time></button>
+      <button type="button" class="scenery-door" data-scenery="bakery" aria-label="Open the village post office"></button>
+      <button type="button" class="scenery-door" data-scenery="lantern" aria-label="Play snowball catch at the clockmaker’s cottage"></button>
     </div>
+    <button type="button" id="village-clock" aria-label="Read the town clock">
+      <span class="clock-face" aria-hidden="true"><i class="hour-hand"></i><i class="minute-hand"></i></span>
+      <span class="date-leaf" aria-hidden="true"><span class="leaf-month"></span><span class="leaf-date"></span></span>
+      <span class="clock-almanac"><span id="village-day"></span><time id="village-time"></time></span>
+    </button>
     <div id="porch-play" hidden></div>
     <div id="yard-stage" aria-label="Snow yard"></div>
     <div id="surface-controls">

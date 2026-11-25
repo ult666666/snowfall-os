@@ -14,8 +14,43 @@ import CoreGraphics
     private var village: URL { directory.appendingPathComponent("Frostpine Hollow.jpg") }
     private var previousEdition: URL { directory.appendingPathComponent("Frostpine Village.jpg") }
 
+    private var compositions: [String: VillageStill.Scene] = [:]
+
+    private func stillURL(_ id: String, alternate: Bool) -> URL {
+        directory.appendingPathComponent("Hollow-" + id + (alternate ? "-B.jpg" : "-A.jpg"))
+    }
     private func isManagedPicture(_ url: URL) -> Bool {
-        same(url, village) || same(url, previousEdition)
+        if same(url,village) || same(url,previousEdition) { return true }
+        guard same(url.deletingLastPathComponent(),directory) else { return false }
+        let name = url.lastPathComponent
+        guard name.hasPrefix("Hollow-"), name.hasSuffix("-A.jpg") || name.hasSuffix("-B.jpg") else { return false }
+        return UUID(uuidString:String(name.dropFirst(7).dropLast(6))) != nil
+    }
+
+    /// Only an explicitly selected Snowfall picture may be updated. Use two bounded
+    /// paths so macOS notices a new composition even if it cached the previous JPEG.
+    func refreshComposition(on screen: NSScreen, scene: URL, plots: [[String: Any]], postKinds: [String],
+                            widgetFrames: [[String:Double]] = []) throws {
+        guard hasBackup, let id = key(screen), let current = workspace.desktopImageURL(for:screen),
+              isManagedPicture(current), try records()[id] != nil else { return }
+        let windows = widgetFrames.compactMap { rect -> CGRect? in
+            guard let x = rect["x"], let y = rect["y"], let w = rect["width"], let h = rect["height"],
+                  w > 0, h > 0 else { return nil }
+            return CGRect(x:x, y:y, width:w, height:h)
+        }
+        let next = VillageStill.Scene(size:screen.frame.size, houses:plots.compactMap(VillageStill.House.init),
+            mail:Array(postKinds.prefix(2)), widgets:windows, edition:try scene.resourceValues(forKeys:[.contentModificationDateKey]).contentModificationDate)
+        let a = stillURL(id,alternate:false), b = stillURL(id,alternate:true)
+        if compositions[id] == next && (same(current,a) || same(current,b)) { return }
+        let data = try VillageStill.render(next,source:scene)
+        if (same(current,a) || same(current,b)), (try? Data(contentsOf:current,options:.mappedIfSafe)) == data {
+            compositions[id] = next
+            return
+        }
+        let target = same(current,a) ? b : a
+        try data.write(to:target,options:.atomic)
+        try workspace.setDesktopImageURL(target,for:screen,options:[.imageScaling:NSNumber(value:NSImageScaling.scaleProportionallyUpOrDown.rawValue),.allowClipping:true])
+        compositions[id] = next
     }
 
     init() {
@@ -79,7 +114,7 @@ import CoreGraphics
         if changed { try data.write(to: village, options: .atomic) }
         var count = 0
         for screen in screens {
-            if changed || !same(workspace.desktopImageURL(for: screen),village) {
+            if changed || workspace.desktopImageURL(for: screen).map(isManagedPicture) != true {
                 try workspace.setDesktopImageURL(village, for: screen, options: [
                     .imageScaling: NSNumber(value: NSImageScaling.scaleProportionallyUpOrDown.rawValue),
                     .allowClipping: true

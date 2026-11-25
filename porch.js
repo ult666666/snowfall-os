@@ -11,142 +11,113 @@
   let round = null;
   const scenicPlots = new Map();
 
-  function footsteps(ctx, x, y, direction, size) {
-    const stride = size * .135;
-    for (let step = 0; step < 7; step++) {
-      const t = step / 6;
-      const px = x + direction * (size * .11 + step * stride);
-      const py = y + size * (.05 + Math.sin(t * 1.9) * .27 + (step % 2) * .035);
-      ctx.fillStyle = 'rgba(116,145,165,' + (.39 - t * .24) + ')';
-      ctx.beginPath();
-      ctx.ellipse(px, py, size * .037, size * .016, direction * -.24, 0, 2 * Math.PI);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,251,234,.74)';
-      ctx.fillRect(px - size * .024, py + size * .01, size * .046, Math.max(.6, size * .009));
-    }
+  const samples = new Map();
+  let streets = [], hoveredId = null;
+
+  function camera() {
+    const art = document.querySelector('#wallpaper'), width=art.clientWidth, height=art.clientHeight;
+    const zoom=Math.max(width/2560,height/1600), narrow=width<=580;
+    return {width,height,zoom,left:(width-2560*zoom)*(narrow?.49:.57),top:(height-1600*zoom)*(narrow?.5:.56)};
   }
-  // Lay short lanes between nearby doorsteps. A cottage can meet at most two lanes.
-  function lanes(ctx, width, height, plots) {
-    if (plots.length < 2) return;
-    const doors = plots.slice(0,128).map(p => ({x:p.x*width,y:p.y*height+p.size*.06,size:p.size}));
-    const candidates=[];
-    const groups=doors.map((_,i)=>i), degree=doors.map(()=>0);
-    const maxDistance=Math.min(width*.36, Math.max(220,height*.62));
-    for(let i=0;i<doors.length;i++) {
-      for(let j=i+1;j<doors.length;j++) {
-        const distance=Math.hypot(doors[i].x-doors[j].x,doors[i].y-doors[j].y);
-        if(distance<maxDistance && distance>Math.min(doors[i].size,doors[j].size)*.83) candidates.push({i,j,distance});
-      }
-    }
-    candidates.sort((a,b)=>a.distance-b.distance);
-    function group(i) { while(groups[i]!==i) i=groups[i]; return i; }
-    ctx.save();
-    ctx.lineCap='round';
-    for(const {i,j} of candidates) {
-      const g1=group(i), g2=group(j);
-      if(g1===g2 || degree[i]===2 || degree[j]===2) continue;
-      groups[g1]=g2; degree[i]++; degree[j]++;
-      let a=doors[i], b=doors[j];
-      if(a.y>b.y) [a,b]=[b,a];
-      const size=(a.size+b.size)/2;
-      const dx=b.x-a.x, dy=b.y-a.y;
-      const side=Math.abs(dx)<size*.4 ? (a.x<width*.55 ? -1 : 1) : Math.sign(dx);
-      ctx.beginPath();
-      ctx.moveTo(a.x,a.y);
-      if(dy>Math.abs(dx)*.76) {
-        const bend=b.x-side*b.size*.77;
-        ctx.bezierCurveTo(a.x+side*size*.85,a.y+dy*.28,bend,a.y+dy*.45,bend,a.y+dy*.70);
-        ctx.bezierCurveTo(bend,b.y+size*.17,b.x-side*size*.31,b.y+size*.13,b.x,b.y);
-      } else {
-        ctx.bezierCurveTo(a.x+dx*.30,a.y+size*.34,b.x-dx*.30,b.y+size*.32,b.x,b.y);
-      }
-      ctx.lineWidth=minmax(size*.118,4,13);
-      ctx.strokeStyle='rgba(137,158,183,.15)'; ctx.stroke();
-      ctx.lineWidth=Math.max(2,ctx.lineWidth-1.6);
-      ctx.strokeStyle='rgba(252,240,218,.57)'; ctx.stroke();
-    }
-    ctx.restore();
+  function project(x,y,view) {
+    return {x:view.left+x*2560*view.zoom, y:view.top+y*1600*view.zoom};
   }
-  function paint(ctx, width, height, list) {
-    lanes(ctx,width,height,list);
-    for (const {id, x, y, size} of list) {
-      const px = x * width, py = y * height;
-      const facing = parseInt(id.slice(-2), 16) % 2 === 0 ? -1 : 1;
-      let direction = facing;
-      if (px > width - size * 1.2) direction = -1;
-      if (px < size * 1.2) direction = 1;
-      ctx.save();
-      ctx.translate(px, py);
-      ctx.scale(size, size);
-      const cast = ctx.createRadialGradient(0, 0, .10, 0, 0, .65);
-      cast.addColorStop(0,'rgba(111,138,159,.25)');
-      cast.addColorStop(.55,'rgba(153,174,192,.18)');
-      cast.addColorStop(1,'rgba(170,190,205,0)');
-      ctx.save();
-      ctx.translate(.10, -.045);
-      ctx.scale(1.48, .25);
-      ctx.fillStyle = cast;
-      ctx.fillRect(-.7,-.7,1.4,1.4);
+  // A lamp, path and shadow already belong to the painted street. A little compressed
+  // powder and one set of boot prints cross the short gap between a live door and its lane.
+  function paint(ctx,width,height,list) {
+    for (const p of list) {
+      ctx.save();ctx.translate(p.x*width,p.y*height);ctx.scale(p.size,p.size);
+      const doorX=([2,4,6].includes(p.variant)?-.20:-.05);
+      const shade=ctx.createLinearGradient(-.15,-.08,.55,.07);
+      shade.addColorStop(0,'rgba(102,122,151,.24)'); shade.addColorStop(1,'rgba(133,154,180,0)');
+      ctx.fillStyle=shade;ctx.beginPath();ctx.moveTo(-.43,-.025);
+      ctx.bezierCurveTo(-.20,.015,.18,-.125,.41,-.11);
+      ctx.bezierCurveTo(.55,-.08,.67,-.05,.66,-.012);
+      ctx.bezierCurveTo(.48,.058,-.20,.065,-.43,-.025);ctx.fill();
+      for (let step=0;step<4;step++) {
+        const x=doorX+Math.sin(step*.50)*.082+step*.013+(step%2)*.026;
+        const y=.018+step*.036;
+        ctx.fillStyle='rgba(135,151,168,'+(.43-step*.045)+')';ctx.beginPath();
+        ctx.ellipse(x,y,.016,.008,-.30,0,Math.PI*2);ctx.fill();
+        ctx.fillStyle='#fff4e4';ctx.beginPath();ctx.ellipse(x-.003,y+.008,.013,.003,-.30,0,Math.PI*2);ctx.fill();
+      }
       ctx.restore();
-      // A low drift at the sill catches the same warm light as the village.
-      ctx.fillStyle = 'rgba(251,246,231,.68)';
-      ctx.beginPath();
-      ctx.moveTo(-.42,-.025);
-      ctx.bezierCurveTo(-.32,-.075,-.21,-.065,-.09,-.025);
-      ctx.bezierCurveTo(-.19,-.004,-.34,.008,-.42,-.025);
-      ctx.fill();
-      ctx.restore();
-      footsteps(ctx, px, py, direction, size);
     }
   }
   function samplePlot(button) {
-    const box = button.querySelector('img').getBoundingClientRect();
-    return {id: button.dataset.sample, x:(box.left + box.width / 2) / innerWidth,
-      y:(box.top + box.height * .88) / innerHeight, size:box.width};
+    const box = button.getBoundingClientRect();
+    return {id:button.dataset.sample, variant:Number(button.dataset.variant),x:(box.left+box.width/2)/innerWidth,
+      y:(box.top+box.height*.88)/innerHeight,size:box.width};
+  }
+  function facade(node,house) {
+    const image = document.createElement('img');
+    image.src='assets/houses/cottage-'+house.variant+'.png?v=5.0.0';
+    image.alt='';image.draggable=false;
+    const sign=document.createElement('span');sign.className='house-name';sign.textContent=house.name;
+    node.append(image,sign);
+  }
+  function place(node,x,y,size) {
+    node.style.left=x+'px';node.style.top=y+'px';node.style.width=size+'px';
+    node.style.zIndex=String(Math.round(y));
+  }
+  function identify(id) {
+    hoveredId=id;
+    for(const node of houses.children) node.classList.toggle('is-identified',node.dataset.houseId===id);
   }
   function showLocalHouses() {
     const nodes = document.createDocumentFragment();
     for (const plot of plots) {
       if (plot.drawHouse !== true || typeof plot.name !== 'string' ||
           !Number.isInteger(plot.variant) || plot.variant < 1 || plot.variant > 6) continue;
-      const tile = document.createElement('div');
-      tile.className = 'wallpaper-cottage';
-      tile.style.left = plot.x*100 + '%';
-      tile.style.top = plot.y*100 + '%';
-      tile.style.width = plot.size + 'px';
-      tile.style.marginTop = -plot.size*.88 + 'px';
-      const picture = document.createElement('img');
-      picture.src = 'assets/houses/cottage-' + plot.variant + '.png?v=4.1.0';
-      picture.alt = '';
-      const sign = document.createElement('span');
-      sign.textContent = plot.name;
-      tile.append(picture,sign);
-      nodes.append(tile);
+      const node = document.createElement('div');node.className='wallpaper-cottage';node.dataset.houseId=plot.id;
+      place(node,plot.x*innerWidth,plot.y*innerHeight,plot.size);facade(node,plot);nodes.append(node);
     }
-    houses.replaceChildren(nodes);
+    houses.replaceChildren(nodes);identify(hoveredId);
+  }
+  function populateSamples() {
+    const village=document.querySelector('#demo-village');
+    for(const house of SnowRooms.samples) {
+      const button=document.createElement('button');button.type='button';button.className='village-house';
+      button.dataset.sample=house.id;button.dataset.variant=house.variant;
+      button.setAttribute('aria-label',house.name+' cottage. Play snowball catch');facade(button,house);
+      village.append(button);samples.set(house.id,button);
+    }
+  }
+  function positionSamples(view) {
+    if (native) return;
+    SnowRooms.samples.forEach((house,i)=>{
+      const button=samples.get(house.id);
+      const slot=streets[house.street]?.[house.lot];
+      // A phone looks at a narrow slice of the illustration. In that camera, use the
+      // visible parcels and keep the rest of the doors reachable in the Houses menu.
+      if(slot) {
+        const p=project(slot.x,slot.y,view),size=Math.max(28,slot.size*view.zoom);
+        button.hidden=p.x-size*.29<0||p.x+size*.29>view.width||p.y<=25||p.y>view.height-12;
+        if(!button.hidden)place(button,p.x,p.y,size);
+      } else {
+        // Directly opening index.html from disk can disable JSON requests. Preserve a playable village.
+        const row=house.street,col=(i%3+.55)/3;
+        place(button,view.width*(.36+col*.59),view.height*(.397+row*.145),Math.min(view.width*.14,view.height*(.064+row*.017)));
+      }
+    });
   }
   function positionScenery() {
-    if (native) return;
-    const sceneArt = document.querySelector('#wallpaper');
-    const width = sceneArt.clientWidth, height = sceneArt.clientHeight;
-    const scale = Math.max(width/2560, height/1600);
-    const narrow = matchMedia('(max-width:580px)').matches;
-    const left = (width-2560*scale)*(narrow ? .49 : .57);
-    const top = (height-1600*scale)*(narrow ? .5 : .56);
+    const view=camera();
+    const clock=document.querySelector('#village-clock'),clockCenter=project(.09,.372,view);
+    clock.style.left=clockCenter.x+'px';clock.style.top=clockCenter.y+'px';clock.style.width=42*1.6*view.zoom+'px';
+    clock.style.fontSize=42*1.6*view.zoom+'px';
+    clock.hidden=clockCenter.x<0||clockCenter.x>view.width||clockCenter.y<0||clockCenter.y>view.height;
+    if(native) { showLocalHouses();return; }
+    positionSamples(view);
     for (const door of document.querySelectorAll('[data-scenery]')) {
-      const bakery = door.dataset.scenery === 'bakery';
-      const x = left + (bakery ? .2222 : .0967)*2560*scale;
-      const y = top + (bakery ? .5285 : .5053)*1600*scale;
-      const size = (bakery ? .12 : .0611)*2560*scale;
-      door.hidden = x < 0 || x > width || y < 0 || y > height;
-      door.style.left = x + 'px';
-      door.style.top = y + 'px';
-      door.style.width = size + 'px';
-      door.style.height = size*.84 + 'px';
-      const plot = {id:'scenery:'+door.dataset.scenery,x:x/width,
-        y:Math.min(1,(y+size*.39)/height),size:Math.min(116,size)};
+      const bakery=door.dataset.scenery==='bakery';
+      const {x,y}=project(bakery?.2222:.0967,bakery?.5285:.5053,view);
+      const size=(bakery?.12:.0611)*2560*view.zoom;
+      door.hidden=x<0||x>view.width||y<0||y>view.height;
+      door.style.left=x+'px';door.style.top=y+'px';door.style.width=size+'px';door.style.height=size*.84+'px';
+      const plot={id:'scenery:'+door.dataset.scenery,x:x/view.width,y:Math.min(1,(y+size*.39)/view.height),size:Math.min(116,size)};
       scenicPlots.set(plot.id,plot);
-      door.onclick = () => tap(plot);
+      if(!bakery) door.onclick=()=>tap(plot);
     }
   }
   function visiblePlots() {
@@ -203,7 +174,7 @@
     button.style.top = feet + 'px';
     button.style.setProperty('--figure-width', width + 'px');
     const image = document.createElement('img');
-    image.src = 'assets/props/' + asset + '.png?v=4.1.0';
+    image.src = 'assets/props/' + asset + '.png?v=5.0.0';
     image.className = className;
     image.alt = '';
     image.draggable = false;
@@ -349,8 +320,16 @@
     round.y = p.y;
     host.style.transform = 'translate(' + (p.x*innerWidth-round.startX) + 'px,' + (p.y*innerHeight-round.startY) + 'px)';
   });
+  if(!native) {
+    populateSamples();
+    // Native plots arrive from the same artwork manifest via snowfall-house-plots.
+    if(location.protocol!=='file:') fetch('assets/village-plan.json?v=5.0.0').then(r=>{
+      if(!r.ok)throw new Error('Village layout unavailable');return r.json();
+    }).then(plan=>{if(Array.isArray(plan.streets)){streets=plan.streets;positionScenery();invalidate();}}).catch(()=>{});
+  }
+  window.addEventListener('snowfall-house-hover',e=>{if(native)identify(e.detail?.id || null);});
   positionScenery();
-  window.addEventListener('snowfall-surface', stop);
+  window.addEventListener('snowfall-surface',()=>{stop();identify(null);});
   document.addEventListener('visibilitychange', () => { if (document.hidden) stop(); });
   window.SnowPorches = Object.freeze({visiblePlots, paint, samplePlot, tap, stop, invalidate});
 })();

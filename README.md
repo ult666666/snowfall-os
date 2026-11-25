@@ -1,34 +1,34 @@
 # Snowfall OS
 
-A cartoon winter village for your Mac. Your real Desktop folders sit along little snow lanes in front of the bakery. The windows warm as your pointer passes. Click a cottage and Flurry steps outside to throw a snowball. Double-click the door to open your files in Finder.
+An illustrated winter desktop for macOS. Follow the snowy streets to your folder cottages, pick up a loose file at the post office, or glance at the town clock. The buildings share a ground plane, perspective, and light with the landscape. A little fox waits by the creek.
 
-![Flurry playing snowball catch between the illustrated sample cottages](docs/desktop-preview.jpg)
+![The illustrated sample village with its post office, clock tower and occupied streets](docs/desktop-preview.jpg)
 
-[Download for Mac](https://github.com/ult666666/snowfall-os/releases/latest/download/Snowfall-OS-macOS.zip) · [Explore the village in your browser](https://ult666666.github.io/snowfall-os/?v=4.1.0)
+[Download for Mac](https://github.com/ult666666/snowfall-os/releases/latest/download/Snowfall-OS-macOS.zip) · [Explore the sample town](https://ult666666.github.io/snowfall-os/?v=5.0.0)
 
 ## Move into the village
 
 On macOS 12 or later, unzip the download and open **Snowfall OS.app**. The snowflake in the menu bar controls the live scene. The app is built for Apple silicon and Intel. Its public binary has an ad-hoc signature and has not been notarized by Apple.
 
-1. In **Folder Houses**, choose **Style Desktop Folders as Houses** to give your immediate Desktop folders painted cottage icons. Double-click a cottage to open its files as usual. New eligible Desktop folders receive houses while styling is enabled.
-2. Pass over a cottage to warm its window. Click it to meet Flurry. When the ball lands, brush the mitten or click it to return the throw. After three returns, or a few idle seconds, the snow clears.
-3. Right-click a cottage in Finder and choose **Services → Open House Widgets**. You can also choose **Folder Houses → Open a House…** from the snowflake menu. A notebook and timer belong to that folder even after a rename. Radio and snow settings are shared.
-4. Enable **Frame Desktop Widgets** for painted eaves around visible system widgets that macOS exposes on the desktop. macOS keeps drawing the original widget and handling its clicks. Widget contents and folder names stay on the Mac.
-5. In **Wallpaper Image**, choose **Set Village as Mac Wallpaper** to keep the painted scene as your desktop picture after the app quits. The live effects run while Snowfall is open.
+1. Choose **Folder Houses → Style Desktop Folders as Houses** from the snowflake menu. With desktop items hidden in macOS, the folders take up plots along the painted streets. Hover to read a name, click for a brief snowball exchange, or double-click to open the actual folder. A cottage’s context menu also leads to its notebook and focus timer.
+2. Pick up a letter on the post-office counter to open its file. The two counter spaces favor documents and pictures. Click the building to browse all loose Desktop items, including packages and aliases. The sorting desk can reveal any item in Finder.
+3. Read the tower for local time. Its clock face opens Clock on supported Macs. In the browser you can switch the time format. Snowfall reads device time locally.
+4. If you show existing widgets on the desktop, enable **Frame Desktop Widgets** in the snowflake menu. The artwork follows their bounds and leaves the controls to macOS. Each widget’s app supplies its content and appearance.
+5. Choose **Wallpaper Image → Set Village as Mac Wallpaper** to save the occupied streets as the system picture. Snowfall updates the picture when its composition changes. The still picture stays when you quit. Open the app for working doors, time, and snow play.
 
-On macOS versions with **Click wallpaper to reveal desktop**, choose **Only in Stage Manager** in **System Settings → Desktop & Dock** to keep ordinary wallpaper clicks quiet when Stage Manager is off. Snowfall leaves this system-wide preference under your control.
+For the composed layout, use **System Settings → Desktop & Dock** to hide Desktop items and choose **Only in Stage Manager** for **Click wallpaper to reveal desktop** with Stage Manager off. If you prefer visible Finder items, the village follows their real positions. File access stays available through Finder in either view.
 
-**To undo the desktop changes**, use **Folder Houses → Restore Original Folder Icons** and **Wallpaper Image → Restore Previous Mac Wallpaper and Quit**. Snowfall saves the original icon state before styling. It skips apps, packages, aliases, and hidden items.
+**To undo the desktop changes**, use **Folder Houses → Restore Original Folder Icons** and **Wallpaper Image → Restore Previous Mac Wallpaper and Quit**. Snowfall saves the original icon state before styling. Choosing a different system picture also stops automatic picture updates.
 
 ![A sample folder cottage showing the widgets available inside](docs/house-room.jpg)
 
-## How the cottages meet the snow
+## How the drawing stays connected to the Mac
 
-The live layer reads the positions Finder saves for Desktop icons. It anchors a soft shadow and footprints at the door and draws short paths between nearby houses. A native target follows the cottage. A second, temporary target follows the mitten during a round. One click brings Flurry onto the snow beside the house. Double-click opens the real folder. Right-click a door to open its folder or its widgets. Finder still handles the surrounding desktop.
+The landscape and the native door buttons share one placement plan. Each lot specifies where the front step meets the street and how large the building is at that depth. The Mac projects that plan onto the available display and reserves space for system widgets. Only the painted buildings receive native controls. Finder keeps its own icon positions. On crowded or heavily cropped displays, every folder is also available through **Folder Houses → Open a House…**.
 
-The app reads a single display’s saved free or grid layout locally. For other layouts it can use Finder coordinates when Automation permission is already available. Stacks and unrecognized positions have no ground effects. If macOS temporarily hides its desktop icons, the wallpaper draws the same folder houses and names at their saved positions. Their doors still work. The public demo has three sample cottages. Double-click a sample house or use **Houses** to reach its widgets. The bakery and lantern cottage also play catch.
+The post office watches the Desktop directory for changes. On a click, it checks that the item still has the expected identity before opening or revealing it. The still wallpaper stores the buildings and pieces of mail without filenames. The public website uses twelve fictional folders and three sample pieces of mail. [Placement plan](assets/village-plan.json) · [Native placement](macos/VillageComposition.swift) · [Local file handling](macos/PostOffice.swift)
 
-Each folder uses one compact 256-pixel image for its Finder icon. Snowfall keeps any original custom icon locally so it can be restored. The Mac app bundles the scenery and generates music with Web Audio.
+The six 256-pixel cottage images are reused at different scales. Snowfall stores a compact Finder icon for each styled folder, plus a local backup of its previous icon when needed. The desktop picture cache reuses two JPEG slots per display. Snow and music run locally.
 
 ## Snow play
 
@@ -49,7 +49,7 @@ The bundled app works offline. To run its isolated integration check, execute `"
 
 ## Learn how an AI product takes shape
 
-The same illustrated roof, snow edge and light direction appear in the landscape and folder icons. The artwork is bundled once. Flurry’s timing, throws and replies run locally with zero model calls. Follow one porch click from Finder’s mouse event to a short game, then inspect how the game cancels its timers when you leave. [Finder click handling](macos/DesktopHouseInteraction.swift) · [Snowball exchange](porch.js) · [Full snow yard](yard.js)
+A folder has a persistent identity, a position in the drawing, and an action. Keeping these separate lets the art change while the same door continues to open the right files. This principle also applies to an AI assistant that suggests which folder to open. Its suggestion can refer to an item ID, and native code can check that ID before doing anything. The clock, file handling and snowball game in this release all run locally with zero model calls. [Door controls](macos/PorchTargets.swift) · [Snowball exchange](porch.js) · [Full snow yard](yard.js)
 
 **Try a design exercise.** A visitor writes “I have half an hour to finish my sketch” but doesn’t know which tool to open. How could a future guide help?
 

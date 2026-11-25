@@ -15,8 +15,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 [hidden] { display: none !important; }
 #scene { position: relative; isolation: isolate; width: 100%; height: 100%; overflow: hidden; }
 #wallpaper, #snow, #yard-stage { position: absolute; inset: 0; width: 100%; height: 100%; }
-#wallpaper { z-index: -2; object-fit: cover; object-position: 57% 56%; pointer-events: none; user-select: none; -webkit-user-select: none; }
-#snow { z-index: -1; overflow: hidden; pointer-events: none; contain: strict; }
+#wallpaper { z-index: 0; object-fit: cover; object-position: 57% 56%; pointer-events: none; user-select: none; -webkit-user-select: none; }
+#snow { z-index: 2; overflow: hidden; pointer-events: none; contain: strict; }
 #snow i {
   position: absolute; top: -12px; left: var(--x); height: var(--size); width: var(--size);
   border-radius: 50%; opacity: var(--alpha);
@@ -108,34 +108,52 @@ html[data-surface="wallpaper"] #scene { pointer-events: none; }
   .done { top: 10px; right: 10px; }
 }
 
-/* Finder supplies the real houses on Mac. The public preview has three playable examples. */
+/* Each facade sits on its painted parcel. Its name appears when someone approaches the door. */
 #widget-eaves, #demo-village { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 #widget-eaves { z-index:0; }
 #demo-village { z-index:2; }
 html[data-surface="wallpaper"] #demo-village, .yard-active #demo-village { display:none; }
-.village-house {
-  position:absolute; display:flex; flex-direction:column; align-items:center; padding:0; border:0;
-  background:none; color:#493b30; transform:translate(-50%,-100%); pointer-events:auto;
-  font:600 12px/1.25 ui-rounded,"Avenir Next",system-ui,sans-serif;
+.village-house, .wallpaper-cottage {
+  position:absolute; display:block; aspect-ratio:1; padding:0; border:0; background:transparent;
+  transform:translate(-50%,-88%); -webkit-user-select:none; user-select:none;
 }
-.village-house img { display:block; width:100%; height:auto; transform-origin:50% 91%; }
-.village-house span {
-  margin-top:-4px; padding:2px 8px 3px; border-radius:4px 5px 4px 5px; background:linear-gradient(178deg,#f5dab0,#dcb78a);
-  border:1px solid #a28263; box-shadow:0 2px 3px #59637d35,inset 0 1px 0 #ffead0;
-  text-shadow:0 1px 0 #fff0d180;
+.village-house { pointer-events:auto; touch-action:manipulation; border-radius:45% 45% 23% 23%; }
+:is(.village-house,.wallpaper-cottage) img { display:block; width:100%; height:auto; pointer-events:none; }
+:is(.village-house,.wallpaper-cottage) .house-name, .clock-almanac {
+  position:absolute; z-index:1; left:50%; top:87%; transform:translate(-50%,-2px);
+  width:max-content; max-width:min(20em,83vw); margin:0; padding:4px 8px 5px;
+  color:#453b31; background:linear-gradient(175deg,#fff4d9,#ead5b4); border:1px solid #93795f;
+  border-radius:4px; box-shadow:0 2px 3px #59596924; opacity:0; transition:opacity .16s,transform .16s;
+  overflow-wrap:anywhere; font:600 clamp(10px,.76vw,13px)/1.22 ui-rounded,"Avenir Next",system-ui,sans-serif;
+  pointer-events:none; text-align:center;
 }
-.village-house.sketchbook { left:64%; top:43%; width:clamp(78px,8.3vw,145px); }
-.village-house.studio { left:83%; top:65%; width:clamp(94px,9.7vw,170px); }
-.village-house.library { left:59%; top:84%; width:clamp(103px,11vw,187px); }
-#village-clock {
-  position:absolute; right:6.5%; top:26.5%; width:clamp(116px,11vw,170px); min-height:64px;
-  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
-  border:0; border-radius:2px; padding:7px 8px 8px; pointer-events:auto;
-  color:#4a4a38; background:radial-gradient(ellipse at 28% 24%,#fff2cf,#f0dcb9 83%); box-shadow:inset 0 0 0 2px #fff2d6;
-  font-family:ui-rounded,"Avenir Next",system-ui,sans-serif;
-}
-#village-day { font-size:10px; font-weight:650; letter-spacing:.02em; color:#796749; }
-#village-time { font:650 clamp(18px,1.8vw,26px)/1.18 ui-rounded,"Avenir Next",system-ui,sans-serif; letter-spacing:-.045em; font-variant-numeric:tabular-nums; }
+.village-house:is(:hover,:focus-visible) .house-name,.wallpaper-cottage.is-identified .house-name,
+#village-clock:is(:focus-visible,:hover,.show-time) .clock-almanac { opacity:1; transform:translate(-50%,1px); }
+#village-clock { position:absolute; z-index:2; padding:0; aspect-ratio:1; transform:translate(-50%,-50%);
+  border:0; border-radius:50%; background:none; pointer-events:auto; touch-action:manipulation; }
+#village-clock::before { content:''; position:absolute; width:max(100%,44px); height:max(100%,44px); left:50%;top:50%;transform:translate(-50%,-50%);border-radius:50%; }
+.clock-face { position:absolute; width:55%; height:55%; left:22.5%; top:22.5%; border-radius:50%; background:#f6eaca; }
+.clock-face i { position:absolute; display:block; left:50%; bottom:50%; border-radius:55% 55% 2px 2px;
+  background:#536c63; transform:translateX(-50%) rotate(var(--angle)); transform-origin:50% 100%; }
+.clock-face .hour-hand { width:9%; height:36%; --angle:var(--hour-angle,300deg); }
+.clock-face .minute-hand { width:6.4%; height:48%; --angle:var(--minute-angle,48deg); }
+.clock-face::after { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:16%; height:16%; border-radius:50%; background:#a8855a; }
+.date-leaf { position:absolute; top:239.3%; left:-13.1%; width:63%; height:72%; z-index:1;
+  display:flex; align-items:center; flex-direction:column; justify-content:flex-start; gap:.01em;
+  transform:rotate(-2deg); pointer-events:none; color:#576958; font-family:"Avenir Next",ui-rounded,system-ui,sans-serif;
+  border-radius:8% 7% 12% 8%; background:linear-gradient(152deg,#fcf2d6 50%,#e7d4af); box-shadow:.016em .025em .013em #9e805b; }
+.date-leaf::before,.date-leaf::after { content:''; position:absolute; top:-7%; height:15%; width:6%; border-radius:60%; background:#816f53; }
+.date-leaf::before { left:18%; }.date-leaf::after { right:18%; }
+.leaf-month { display:block; width:100%; line-height:1.26; font-size:.166em; letter-spacing:.03em;
+  font-weight:700; text-transform:uppercase; color:#fff1cc; background:#aa745b; border-radius:2px 2px 0 0; }
+.leaf-date { font:700 .365em/1.19 Georgia,ui-serif,serif; font-variant-numeric:lining-nums tabular-nums; }
+.clock-almanac { top:111%; display:flex; align-items:center; gap:.58em; white-space:nowrap; }
+#village-time { font-variant-numeric:tabular-nums; }
+.custom-image #village-clock,.yard-active #village-clock,.room-mode #village-clock { display:none; }
+/* A native widget station sits in front of any architecture it physically obscures,
+   including the tower dial and calendar. The remaining wall stays visible underneath. */
+html[data-surface="wallpaper"] #widget-eaves { z-index:1; }
+html[data-surface="wallpaper"] #village-clock { z-index:0; pointer-events:none; }
 .scene-controls { background:linear-gradient(150deg,#4c5b4ce8,#3c4e44e6); border-color:#e2d7ba94; }
 .scene-caption { color:#fff9ec; text-shadow:0 1px 5px #374438,0 0 12px #37443870; }
 .scene-controls button:focus-visible,.village-house:focus-visible,#village-clock:focus-visible { outline-color:#314e3f; }
@@ -151,12 +169,6 @@ html[data-surface="wallpaper"] #demo-village, .yard-active #demo-village { displ
 .room-mode #tools-panel[data-content="houses"] .panel-head { display:none; }
 @media(max-width:580px) {
   #wallpaper { object-position:49% center; }
-  .village-house.sketchbook { left:66%; top:40%; width:76px; }
-  .village-house.studio { left:83%; top:62%; width:89px; }
-  .village-house.library { left:52%; top:83%; width:101px; }
-  .village-house span { font-size:10px; padding:1px 5px 2px; }
-  #village-clock { top:24%; right:5%; min-height:46px; width:96px; padding:5px; }
-  #village-day { font-size:9px; }
   .scene-controls button { font-size:12px; padding-inline:8px; gap:4px; }
   .scene-controls [data-icon] svg { width:15px; }
 }
@@ -187,19 +199,8 @@ html[data-surface="wallpaper"] #demo-village, .yard-active #demo-village { displ
 @media (hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference) {
   #scene:not(.reduce-motion) :is(.village-house,.scenery-door):hover::before { animation:cottage-lamplight 1.8s ease-out .12s 1; }
 }
-.village-house span { position:relative; margin-top:-7%; padding:2px 9px 3px; color:#53483c;
-  background:linear-gradient(177deg,#f2dab2,#e4c79e); border-color:#ac916d; box-shadow:0 1px 2px #647a8b30; }
-.village-house span::after { content:''; position:absolute; left:48%; top:100%; height:4px; width:3px;
-  background:#a28768; box-shadow:1px 1px 0 #c2cbd3; border-radius:0 0 1px 1px; }
-
 #wallpaper-cottages { position:absolute; inset:0; z-index:1; pointer-events:none; }
 html:not([data-surface="wallpaper"]) #wallpaper-cottages { display:none; }
-.wallpaper-cottage { position:absolute; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; }
-.wallpaper-cottage img { display:block; width:100%; height:auto; }
-.wallpaper-cottage span { max-width:130%; margin-top:-6%; padding:1px 4px 2px; border-radius:3px;
-  overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere;
-  text-align:center; font:600 10px/1.12 ui-rounded,"Avenir Next",system-ui,sans-serif; color:#493d33;
-  background:linear-gradient(#f0d7ae,#e1c29a); border:1px solid #a88c6a; box-shadow:0 1px 2px #72819535; }
 .scenery-door { position:absolute; padding:0; border:0; border-radius:40% 40% 14% 14%;
   background:transparent; transform:translate(-50%,-50%); pointer-events:auto; touch-action:manipulation; }
 .scenery-door:focus-visible { outline:2px dotted #315e59; outline-offset:2px; }

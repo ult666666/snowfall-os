@@ -82,22 +82,33 @@
   scene.addEventListener('pointerleave',wake);
 
   $('#demo-village').hidden = isMacApp;
+  // Set hands on the clock face painted into the tower. Sleep between minute changes.
+  const townClock = $('#village-clock');
+  let twentyFour = false, clockTimer, dismissClock;
+  try { twentyFour = localStorage.getItem('snowfall-os.clock24') === '1'; } catch {}
+  function updateClock() {
+    clearTimeout(clockTimer);
+    const now = new Date(), minutes = now.getMinutes();
+    townClock.style.setProperty('--hour-angle',(now.getHours()%12*30+minutes*.5)+'deg');
+    townClock.style.setProperty('--minute-angle',minutes*6+'deg');
+    $('#village-day').textContent = now.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+    $('.leaf-month').textContent=now.toLocaleDateString(undefined,{month:'short'});
+    $('.leaf-date').textContent=now.toLocaleDateString(undefined,{day:'numeric'});
+    const time = $('#village-time');
+    time.textContent = now.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',hour12:!twentyFour});
+    time.dateTime = now.toISOString();
+    townClock.setAttribute('aria-label','Town clock, '+time.textContent+'. Switch time format');
+    if (!document.hidden && !(isMacApp && surface === 'wallpaper')) clockTimer = setTimeout(updateClock,60025-now.getSeconds()*1000-now.getMilliseconds());
+  }
+  townClock.addEventListener('click',() => {
+    twentyFour = !twentyFour;
+    try { localStorage.setItem('snowfall-os.clock24',twentyFour ? '1' : '0'); } catch {}
+    updateClock(); townClock.classList.add('show-time');
+    clearTimeout(dismissClock); dismissClock=setTimeout(()=>townClock.classList.remove('show-time'),2800);
+  });
+  updateClock(); document.addEventListener('visibilitychange',updateClock);
+  window.addEventListener('snowfall-clock-tick',updateClock);
   if (!isMacApp) {
-    let twentyFour = false;
-    try { twentyFour = localStorage.getItem('snowfall-os.clock24') === '1'; } catch {}
-    const updateClock = () => {
-      const now = new Date();
-      $('#village-day').textContent = now.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
-      $('#village-time').textContent = now.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',hour12:!twentyFour});
-      $('#village-time').dateTime = now.toISOString();
-    };
-    $('#village-clock').addEventListener('click',() => {
-      twentyFour = !twentyFour;
-      try { localStorage.setItem('snowfall-os.clock24',twentyFour ? '1' : '0'); } catch {}
-      updateClock();
-    });
-    updateClock();
-    setInterval(updateClock,15000);
     for(const button of document.querySelectorAll('[data-sample]')) {
       button.addEventListener('click', event => {
         if (event.detail < 2) SnowPorches.tap(SnowPorches.samplePlot(button));
@@ -160,6 +171,21 @@
         button.append(icon(value,'tool-icon'),document.createTextNode(label),icon('forward'));
         button.addEventListener('click',() => showTools(value));
         list.append(button);
+      }
+      if(!isMacApp) {
+        const office=$('[data-scenery="bakery"]');
+        if(office.hidden || scene.classList.contains('custom-image')) {
+          const mail=document.createElement('button');mail.type='button';mail.className='tool-row';
+          mail.append(icon('notes','tool-icon'),document.createTextNode('Village post office'),icon('forward'));
+          mail.addEventListener('click',()=>office.click());list.append(mail);
+        }
+        if(townClock.hidden || scene.classList.contains('custom-image')) {
+          const reading=document.createElement('button');reading.type='button';reading.className='tool-row';
+          const time=document.createTextNode('');
+          const label=()=>{time.textContent='Town clock · '+$('#village-day').textContent+' · '+$('#village-time').textContent;};
+          reading.append(icon('clock','tool-icon'),time);label();
+          reading.addEventListener('click',()=>{townClock.click();label();});list.append(reading);
+        }
       }
       body.append(list);
       if (isMacApp) {
@@ -235,7 +261,7 @@
     if (custom !== null && (typeof custom !== 'string' || !custom.startsWith('data:image/jpeg;base64,'))) return;
     const revision = ++imageRevision;
     const replacement = new Image();
-    replacement.src = custom || 'assets/scene.jpg?v=4.1.0';
+    replacement.src = custom || 'assets/scene.jpg?v=5.0.0';
     try {
       await replacement.decode();
       if (revision !== imageRevision) return;
