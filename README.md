@@ -20,7 +20,13 @@ If macOS asks for Desktop-folder access, choose **Allow** to connect the real fo
 
 For the composed layout, use **System Settings → Desktop & Dock** to hide Desktop items and choose **Only in Stage Manager** for **Click wallpaper to reveal desktop** with Stage Manager off. If you prefer visible Finder items, the village follows their real positions. File access stays available through Finder in either view.
 
-**To undo the desktop changes**, use **Folder Houses → Restore Original Folder Icons** and **Wallpaper Image → Restore Previous Mac Wallpaper and Quit**. Snowfall saves the original icon state before styling. Choosing a different system picture also stops automatic picture updates.
+## Restore your desktop
+
+1. If you styled your folders, open the snowflake menu and choose **Folder Houses → Restore Original Folder Icons**. Snowfall restores saved custom artwork as well as standard Finder icons.
+2. If you set the village as your system picture, choose **Wallpaper Image → Restore Previous Mac Wallpaper and Quit**. If you only used the live layer, quit Snowfall from the snowflake menu.
+3. If you use different wallpapers across Spaces, visit each Space where you used the village. If a Space still shows Snowfall, select its previous picture in **System Settings → Wallpaper**. For an Apple dynamic wallpaper, choose the original under **Dynamic Wallpapers** and select **Dynamic**.
+
+If you changed folder, widget, or wallpaper-click visibility during setup, return those choices to their previous values in **System Settings → Desktop & Dock**.
 
 ![A sample folder cottage showing the widgets available inside](docs/house-room.jpg)
 
