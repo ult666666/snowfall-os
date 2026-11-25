@@ -8,7 +8,7 @@
   let pending = 0;
   const trim = new Image();
   trim.onload = schedule;
-  trim.src = 'assets/widget-cottage.webp?v=4.0.1';
+  trim.src = 'assets/widget-cottage.webp?v=4.1.0';
 
   function cottage(ctx, r, others) {
     // A nine-slice keeps the painted posts narrow and the berries round on large widgets.

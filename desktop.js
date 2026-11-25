@@ -235,7 +235,7 @@
     if (custom !== null && (typeof custom !== 'string' || !custom.startsWith('data:image/jpeg;base64,'))) return;
     const revision = ++imageRevision;
     const replacement = new Image();
-    replacement.src = custom || 'assets/scene.jpg?v=4.0.1';
+    replacement.src = custom || 'assets/scene.jpg?v=4.1.0';
     try {
       await replacement.decode();
       if (revision !== imageRevision) return;

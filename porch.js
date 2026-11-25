@@ -116,7 +116,7 @@
       tile.style.width = plot.size + 'px';
       tile.style.marginTop = -plot.size*.88 + 'px';
       const picture = document.createElement('img');
-      picture.src = 'assets/houses/cottage-' + plot.variant + '.png?v=4.0.1';
+      picture.src = 'assets/houses/cottage-' + plot.variant + '.png?v=4.1.0';
       picture.alt = '';
       const sign = document.createElement('span');
       sign.textContent = plot.name;
@@ -162,7 +162,9 @@
   function stop() {
     if (!round) return;
     for (const timer of round.timers) clearTimeout(timer);
-    if (status.textContent === round.bubble?.textContent) status.textContent = '';
+    if (status.textContent === round.message) status.textContent = '';
+    if (round.sweep) window.removeEventListener('pointermove', round.sweep);
+    if (host.contains(document.activeElement) && round.opener?.isConnected) round.opener.focus({preventScroll:true});
     round = null;
     host.replaceChildren();
     host.hidden = true;
@@ -182,15 +184,45 @@
     game.timers.delete(game.idle);
     game.idle = schedule(game, 7800, stop);
   }
-  function actor(className, asset, x, y, size) {
-    const el = document.createElement(asset ? 'img' : 'span');
+  function actor(className, x, y, size) {
+    const el = document.createElement('span');
+    el.setAttribute('aria-hidden', 'true');
     el.className = className;
-    if (asset) { el.alt = ''; el.src = 'assets/props/' + asset + '.png?v=4.0.1'; }
     el.style.left = x + 'px';
     el.style.top = y + 'px';
-    if (size) el.style.width = size + 'px';
+    el.style.width = size + 'px';
     host.append(el);
     return el;
+  }
+  function returnTarget(game, asset, className, label, x, feet, width) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'porch-return';
+    button.setAttribute('aria-label', label);
+    button.style.left = x + 'px';
+    button.style.top = feet + 'px';
+    button.style.setProperty('--figure-width', width + 'px');
+    const image = document.createElement('img');
+    image.src = 'assets/props/' + asset + '.png?v=4.1.0';
+    image.className = className;
+    image.alt = '';
+    image.draggable = false;
+    button.append(image);
+    button.addEventListener('click', () => reply(game));
+    host.append(button);
+    return button;
+  }
+  function watchMitten(game) {
+    if (!matchMedia('(hover:hover) and (pointer:fine)').matches) return;
+    let previous = null;
+    game.sweep = event => {
+      if (event.pointerType !== 'mouse' || event.buttons) { previous = null; return; }
+      const inside = game.mitt.contains(event.target);
+      if (previous && !previous.inside && inside && !game.busy &&
+          Math.hypot(event.clientX-previous.x,event.clientY-previous.y) > 1) reply(game);
+      previous = {inside, x:event.clientX, y:event.clientY};
+    };
+    window.addEventListener('pointermove', game.sweep, {passive:true});
   }
   function animate(game, node, frames, duration) {
     if (game.still || !node.animate) return;
@@ -198,7 +230,7 @@
   }
   function spray(game, point) {
     for (let i = 0; i < (game.still ? 1 : 7); i++) {
-      const dot = actor('porch-powder', null, point.x, point.y, 3 + i % 3);
+      const dot = actor('porch-powder', point.x, point.y, 3 + i % 3);
       const dx = Math.cos(i * 2.29) * (8 + i * 2.5), dy = -8 - (i % 4) * 4;
       animate(game, dot, [
         {transform:'translate(-50%,-50%)', opacity:.95},
@@ -209,7 +241,16 @@
     }
   }
   function lob(game, from, to, done) {
-    const ball = actor('porch-ball', null, from.x, from.y, game.ballSize);
+    const ball = actor('porch-ball', from.x, from.y, game.ballSize);
+    if (to === game.to) {
+      ball.classList.add('incoming');
+      ball.addEventListener('pointerdown', event => {
+        if (event.button === 0 && event.isPrimary) {
+          event.preventDefault();
+          reply(game);
+        }
+      });
+    }
     const flight = game.still ? 110 : 545;
     if (game.still) { ball.style.left = to.x + 'px'; ball.style.top = to.y + 'px'; }
     else {
@@ -224,7 +265,7 @@
     schedule(game, flight, () => { ball.remove(); spray(game,to); done(); });
   }
   function say(game, message) {
-    game.bubble.textContent = message;
+    game.message = message;
     status.textContent = message;
   }
   function create(p) {
@@ -241,23 +282,25 @@
     const still = scene.classList.contains('reduce-motion') || matchMedia('(prefers-reduced-motion: reduce)').matches;
     const game = {id:p.id, x:p.x, y:p.y, startX:x, startY:y, busy:true, pending:false, returns:0, timers:new Set(), still,
       ballSize:minmax(size*.17,7,12), arc:Math.min(size*.72,feet-size*.47-3),
-      from:{x:flurryX+dir*size*.20,y:feet-size*.45}, to:{x:mittX, y:mittY-size*.21}};
+      from:{x:flurryX+dir*size*.20,y:feet-size*.45}, to:{x:mittX-size*.07, y:mittY-size*.46}, opener:document.activeElement};
     round = game;
     host.hidden = false;
     host.dataset.returns = '0';
-    game.flurry = actor('porch-flurry', 'snowman', flurryX, feet, size);
-    actor('porch-mitten', 'yard-mitten', mittX, mittY, size*.47);
-    game.bubble = actor('porch-bubble', null, minmax((flurryX+mittX)/2,62,width-62), Math.max(24,feet - size*.99 - 5));
-    say(game, 'Catch!');
-    animate(game, game.flurry, [{transform:'translate(-50%,-92%) scale(.76)',opacity:.1},
-      {transform:'translate(-50%,-102%) scale(1.03)',opacity:1,offset:.7},
-      {transform:'translate(-50%,-100%)'}],240);
+    game.flurry = returnTarget(game, 'snowman', 'porch-flurry', 'Toss a snowball to Flurry', flurryX, feet, size).firstElementChild;
+    game.mitt = returnTarget(game, 'yard-mitten', 'porch-mitten', 'Return the snowball', mittX, mittY, size*.47);
+    watchMitten(game);
+    say(game, 'Flurry tosses you a snowball.');
+    animate(game, game.flurry, [{transform:'translateY(8%) scale(.76)',opacity:.1},
+      {transform:'translateY(-2%) scale(1.03)',opacity:1,offset:.7},
+      {transform:'none'}],240);
     schedule(game, still ? 40 : 230, () => lob(game, game.from, game.to, () => ready(game)));
     idleLimit(game);
   }
   function ready(game) {
     game.busy = false;
-    say(game, 'Click house to throw');
+    game.held = actor('porch-ball porch-held', game.to.x, game.to.y, game.ballSize);
+    game.mitt.dataset.loaded = '';
+    say(game, 'Snowball caught. Your turn.');
     if (game.pending) { game.pending = false; reply(game); }
   }
   function reply(game) {
@@ -265,18 +308,20 @@
     if (game.busy) { game.pending = true; return; }
     game.busy = true;
     idleLimit(game);
-    say(game, 'Your throw!');
+    game.held?.remove();
+    delete game.mitt.dataset.loaded;
+    say(game, 'You throw the snowball back.');
     lob(game, game.to, game.from, () => {
       game.returns++;
       host.dataset.returns = String(game.returns);
-      animate(game, game.flurry, [{transform:'translate(-50%,-100%) rotate(0)'},
-        {transform:'translate(-50%,-103%) rotate(-8deg)',offset:.4},
-        {transform:'translate(-50%,-100%) rotate(0)'}],270);
+      animate(game, game.flurry, [{transform:'none'},
+        {transform:'translateY(-3%) rotate(-8deg)',offset:.4},
+        {transform:'none'}],270);
       if (game.returns === 3) {
         say(game, 'Three in a row!');
         schedule(game, 1900, stop);
       } else {
-        say(game, game.returns + ' / 3');
+        say(game, game.returns + ' of 3 returned.');
         schedule(game, 490, () => lob(game, game.from, game.to, () => ready(game)));
       }
     });

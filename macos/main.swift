@@ -75,6 +75,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         porches.onLayout = { [weak self] in self?.syncPorchTargets() }
         porches.onTap = { [weak self] plot in self?.playAtDoor(plot) }
         doors.onVisibility = { [weak self] in self?.sendAllPlots() }
+        doorstep.occupiedDoorFrames = { [weak self] in self?.doors.occupiedFrames ?? [] }
         doors.onTap = { [weak self] plot in
             self?.localPorchClicks += 1
             self?.playAtDoor(plot)
@@ -316,6 +317,8 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         snowOption.state = chosen ? .on : .off
         snowOption.toolTip = !movement ? "Paused while Reduce Motion is enabled in macOS."
             : !webEffectsEnabled ? "Paused by your cabin snowfall settings." : nil
+        doors.ambientEnabled = movement && webEffectsEnabled
+        doorstep.reduceMotion = !movement || !webEffectsEnabled
         snow.setEnabled(!smokeTest && chosen && movement && webEffectsEnabled)
     }
 

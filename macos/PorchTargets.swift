@@ -12,17 +12,28 @@ import AppKit
 
         var target: CGRect {
             let s = plot.size
-            let width = s * (drawHouse ? 1 : 0.72)
-            let height = s * (drawHouse ? 1 : 0.72)
-            return CGRect(x: plot.center.x - width / 2, y: plot.center.y - height / 2 + (drawHouse ? 0 : s * 0.05),
-                          width: width, height: height)
+            // With Finder visible its rename/select label stays native. With Finder hidden
+            // the wallpaper's own sign opens the same house as its painted facade.
+            let sign = drawHouse && folder != nil
+            let textWidth = ceil((title as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: 10, weight: .semibold)]).width) + 10
+            let width = sign ? max(s, min(s * 1.3, textWidth)) : s
+            let signHeight: CGFloat = sign ? (textWidth > width ? 25 : 14) : 0
+            return CGRect(x: plot.center.x - width / 2, y: plot.center.y - s / 2,
+                          width: width, height: s + signHeight)
         }
     }
+    var ambientEnabled = true {
+        didSet {
+            if !ambientEnabled { for (_, panel) in windows.values { panel.button.clearGlint() } }
+        }
+    }
+    private var lastGlint: TimeInterval = -.infinity
     var onTap: ((Plot) -> Void)?
     var onOpen: ((String) -> Void)?
     var onRoom: ((String) -> Void)?
     private var windows: [String: (Door, DoorPanel)] = [:]
     var count: Int { windows.count }
+    var occupiedFrames: [CGRect] { windows.values.map { $0.1.frame } }
     var onVisibility: (() -> Void)?
     private(set) var finderDisplays = Set<CGDirectDisplayID>()
     private var watch: Timer?
@@ -121,6 +132,13 @@ import AppKit
             let panel = windows[id]?.1 ?? DoorPanel()
             let button = panel.button
             button.door = door
+            button.allowGlint = { [weak self] in
+                guard let self, self.ambientEnabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return false }
+                let now = ProcessInfo.processInfo.systemUptime
+                guard now - self.lastGlint > 2.8 else { return false }
+                self.lastGlint = now
+                return true
+            }
             button.onTap = { [weak self] in self?.onTap?(door.plot) }
             button.onOpen = { [weak self] in self?.onOpen?(id) }
             button.onRoom = { [weak self] in self?.onRoom?(id) }
@@ -167,7 +185,7 @@ import AppKit
             isOpaque = false
             // Fully transparent pixels are click-through on macOS. A faint tint
             // keeps the actual painted door receptive without a visible tile.
-            backgroundColor = NSColor(calibratedWhite: 0.94, alpha: 0.03)
+            backgroundColor = NSColor(calibratedWhite: 0.94, alpha: 0.018)
             hasShadow = false
             canHide = false
             hidesOnDeactivate = false
@@ -186,10 +204,15 @@ import AppKit
         var onTap: (() -> Void)?
         var onOpen: (() -> Void)?
         var onRoom: (() -> Void)?
+        var allowGlint: (() -> Bool)?
+        private var tracking: NSTrackingArea?
+        private var glint: CAGradientLayer?
+        private var lastGlint: TimeInterval = -.infinity
         private var delayed: DispatchWorkItem?
         private var pressed: CGPoint?
         override init(frame: NSRect) {
             super.init(frame:frame)
+            wantsLayer = true
             setAccessibilityElement(true)
             setAccessibilityRole(.button)
             setAccessibilityHelp("Click to exchange snowballs. Double-click a folder cottage to open its files.")
@@ -197,13 +220,52 @@ import AppKit
         required init?(coder: NSCoder) { nil }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override var mouseDownCanMoveWindow: Bool { false }
-        override func resetCursorRects() { addCursorRect(bounds, cursor: .pointingHand) }
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            if let tracking { removeTrackingArea(tracking) }
+            let area = NSTrackingArea(rect:.zero, options:[.inVisibleRect,.mouseEnteredAndExited,.activeAlways], owner:self, userInfo:nil)
+            addTrackingArea(area)
+            tracking = area
+        }
+        override func mouseEntered(with event: NSEvent) {
+            guard let door, let layer, NSEvent.pressedMouseButtons == 0 else { return }
+            let now = ProcessInfo.processInfo.systemUptime
+            guard now - lastGlint > 9, allowGlint?() == true else { return }
+            lastGlint = now
+            clearGlint()
+            // This little side window occurs on every house design. Its warm light
+            // blooms at the pane and fades back into the original painted glass.
+            let s = door.plot.size
+            let glow = CAGradientLayer()
+            glow.name = "CottageWindowLight"
+            glow.type = .radial
+            glow.startPoint = CGPoint(x:0.5, y:0.5)
+            glow.endPoint = CGPoint(x:1, y:1)
+            let light = NSColor(calibratedRed:1, green:0.78, blue:0.38, alpha:1)
+            glow.colors = [light.withAlphaComponent(0.86).cgColor, light.withAlphaComponent(0.32).cgColor,
+                           light.withAlphaComponent(0).cgColor]
+            glow.locations = [0, 0.38, 1]
+            let x = bounds.midX + s * (door.folder == nil ? 0.12 : 0.20)
+            let y = bounds.maxY - s * (door.folder == nil ? 0.55 : 0.61)
+            glow.frame = CGRect(x:x-s*0.14,y:y-s*0.15,width:s*0.28,height:s*0.30)
+            glow.opacity = 0
+            layer.addSublayer(glow)
+            glint = glow
+            let pulse = CAKeyframeAnimation(keyPath:"opacity")
+            pulse.values = [0, 0.85, 0.5, 0]
+            pulse.keyTimes = [0, 0.24, 0.53, 1]
+            pulse.duration = 1.35
+            glow.add(pulse, forKey:"lantern")
+        }
+        func clearGlint() { glint?.removeFromSuperlayer(); glint = nil }
         override func accessibilityPerformPress() -> Bool { cancel(); onTap?(); return true }
         override func mouseDown(with event: NSEvent) {
             delayed?.cancel(); delayed = nil
             if event.clickCount > 1 {
                 pressed = nil
-                if door?.folder != nil { onOpen?() } else { onTap?() }
+                if event.clickCount == 2 {
+                    if door?.folder != nil { onOpen?() } else { onTap?() }
+                }
             } else { pressed = convert(event.locationInWindow, from:nil) }
         }
         override func mouseDragged(with event: NSEvent) {
@@ -243,6 +305,6 @@ import AppKit
         @objc private func play() { onTap?() }
         @objc private func open() { onOpen?() }
         @objc private func room() { onRoom?() }
-        func cancel() { delayed?.cancel(); delayed = nil; pressed = nil }
+        func cancel() { delayed?.cancel(); delayed = nil; pressed = nil; clearGlint() }
     }
 }
