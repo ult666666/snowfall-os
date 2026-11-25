@@ -206,7 +206,7 @@
         control('mute').setAttribute('aria-label', lastMute ? 'Unmute' : 'Mute');
         control('mute').title = lastMute ? 'Unmute' : 'Mute';
       }
-      el('.radio-air').textContent = message || (playing ? 'ON AIR' : 'OFF AIR');
+      el('.radio-air').textContent = message || (playing ? 'Now playing' : 'Paused');
       favoriteButton.setAttribute('aria-pressed', String(favorites.includes(song.title)));
       slider.value = String(current);
       slider.setAttribute('aria-valuetext', formatTime(current) + ' of ' + formatTime(length));

@@ -1,76 +1,135 @@
 import AppKit
 import WebKit
+import UniformTypeIdentifiers
 
 private let appName = "Snowfall OS"
 private let smokeTest = CommandLine.arguments.contains("--smoke-test")
+private let snowPreference = "SnowOnAppWindows"
 
-private final class CabinWindow: NSWindow {
-    // Desktop mode uses a borderless window that still needs key events for notes.
-    override var canBecomeKey: Bool { true }
-    override var canBecomeMain: Bool { true }
+private final class WallpaperWindow: NSWindow {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+    override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }
 
-private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler, NSMenuItemValidation {
-    private var window: CabinWindow!
-    private var webView: WKWebView!
-    private let standardStyle: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
-    private var desktopMode = false
-    private var windowedFrame = NSRect.zero
+private enum Route: String { case scene, yard, tools }
+
+@MainActor
+private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
+    private struct Background {
+        let window: WallpaperWindow
+        let view: WKWebView
+        var ready = false
+        var pendingActions: [String] = []
+    }
+    private var backgrounds: [NSNumber: Background] = [:]
+    private var preview: NSWindow?
+    private var previewView: WKWebView?
+    private var previewReady = false
+    private var desiredRoute: Route = .scene
+    private var routeRevision = 0
+    private var status: NSStatusItem!
+    private var snowOption: NSMenuItem!
+    private let picture = WallpaperImage(temporary: smokeTest)
+    private var alpineChoice: NSMenuItem!
+    private var imageRevision = 0
+    private var picker: NSOpenPanel?
     private var webRoot: URL!
+    private var escapeMonitor: Any?
+    private lazy var snow = WindowSnow()
+    private let store: WKWebsiteDataStore = smokeTest ? .nonPersistent() : .default()
     private var smokeDeadline: Timer?
+    private var smokeBegan = false
     private var smokeBridgeReceived = false
+    private var failing = false
+    // Wait for the local scene to report its saved snowfall setting on launch.
+    private var webEffectsEnabled = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard let root = Bundle.main.resourceURL?.appendingPathComponent("Desktop", isDirectory: true),
               FileManager.default.fileExists(atPath: root.appendingPathComponent("index.html").path) else {
-            fail("Missing the bundled desktop page.")
+            fail("The bundled cabin scene is missing.")
             return
         }
         webRoot = root.standardizedFileURL
-        NSApp.mainMenu = buildMenu()
-
-        let config = WKWebViewConfiguration()
-        config.websiteDataStore = smokeTest ? .nonPersistent() : .default()
-        config.mediaTypesRequiringUserActionForPlayback = []
-        config.userContentController.add(self, name: "snowfallWindow")
-        webView = WKWebView(frame: .zero, configuration: config)
-        webView.navigationDelegate = self
-
-        let visible = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
-        let frame = NSRect(x: 0, y: 0, width: min(1240, visible.width * 0.94), height: min(810, visible.height * 0.91))
-        window = CabinWindow(contentRect: frame, styleMask: standardStyle, backing: .buffered, defer: false)
-        window.title = appName
-        window.contentMinSize = NSSize(width: 380, height: 520)
-        window.backgroundColor = NSColor(calibratedRed: 0.13, green: 0.10, blue: 0.19, alpha: 1)
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.contentView = webView
-        window.delegate = self
-        window.collectionBehavior = [.fullScreenPrimary]
-        window.isReleasedWhenClosed = false
-        window.center()
-
-        if smokeTest {
-            smokeDeadline = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in
-                self?.fail("Timed out waiting for the native web view.")
-            }
-        } else {
-            _ = window.setFrameUsingName("CabinWindow")
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
+        UserDefaults.standard.register(defaults: [snowPreference: true])
+        installMenus()
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(applySnowPreference),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil
+        )
+        applySnowPreference()
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self = self, let preview = self.preview,
+                  event.keyCode == 53, event.window === preview else { return event }
+            self.useWallpaper(nil)
+            return nil
         }
-        webView.loadFileURL(root.appendingPathComponent("index.html"), allowingReadAccessTo: root)
+        if smokeTest {
+            smokeDeadline = Timer.scheduledTimer(timeInterval: 35, target: self, selector: #selector(smokeTimeout), userInfo: nil, repeats: false)
+        }
+        syncScreens()
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    private func installMenus() {
+        status = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = status.button {
+            if let icon = NSImage(systemSymbolName: "snowflake", accessibilityDescription: appName) {
+                icon.isTemplate = true
+                button.image = icon
+            } else { button.title = "❄" }
+            button.toolTip = appName
+        }
+        let actions = NSMenu()
+        actions.addItem(item("Play in Snow", #selector(play(_:)), target: self))
+        actions.addItem(item("Roll a Snowball", #selector(rollSnow(_:)), target: self))
+        actions.addItem(item("Send the Snowplow", #selector(sendPlow(_:)), target: self))
+        actions.addItem(item("Tools", #selector(tools(_:)), target: self))
+        actions.addItem(.separator())
+        actions.addItem(item("Return to Preview", #selector(returnToPreview(_:)), target: self))
+        actions.addItem(item("Use as Live Wallpaper", #selector(useWallpaper(_:)), target: self))
+        snowOption = item("Snow on App Windows", #selector(toggleSnow(_:)), target: self)
+        actions.addItem(snowOption)
+        let images = submenu("Wallpaper Image", in: actions)
+        alpineChoice = item("Alpine Cabin", #selector(restoreAlpine(_:)), target: self)
+        alpineChoice.state = picture.dataURL == nil ? .on : .off
+        images.addItem(alpineChoice)
+        images.addItem(item("Choose Image…", #selector(chooseImage(_:)), target: self))
+        actions.addItem(.separator())
+        let nativeApps = submenu("Open Mac App", in: actions)
+        for (label, command) in [("Notes", "notes"), ("Music", "music"), ("Clock", "clock")] {
+            let entry = item(label, #selector(openNativeAppFromMenu(_:)), target: self)
+            entry.representedObject = command
+            nativeApps.addItem(entry)
+        }
+        actions.addItem(.separator())
+        actions.addItem(item("Quit \(appName)", #selector(NSApplication.terminate(_:)), "q"))
+        status.menu = actions
 
-    func applicationWillTerminate(_ notification: Notification) {
-        if !smokeTest && !desktopMode { window?.saveFrame(usingName: "CabinWindow") }
-    }
-
-    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if window.isMiniaturized { window.deminiaturize(nil) }
-        window.makeKeyAndOrderFront(nil)
-        return true
+        let bar = NSMenu()
+        let app = submenu(appName, in: bar)
+        app.addItem(item("About \(appName)", #selector(NSApplication.orderFrontStandardAboutPanel(_:))))
+        app.addItem(.separator())
+        app.addItem(item("Quit \(appName)", #selector(NSApplication.terminate(_:)), "q"))
+        let edit = submenu("Edit", in: bar)
+        for (title, action, key) in [("Undo", "undo:", "z"), ("Redo", "redo:", "Z"), ("Cut", "cut:", "x"),
+                                    ("Copy", "copy:", "c"), ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] {
+            if title == "Cut" { edit.addItem(.separator()) }
+            edit.addItem(item(title, NSSelectorFromString(action), key))
+        }
+        let view = submenu("View", in: bar)
+        view.addItem(item("Play in Snow", #selector(play(_:)), target: self))
+        view.addItem(item("Tools", #selector(tools(_:)), target: self))
+        view.addItem(item("Return to Preview", #selector(returnToPreview(_:)), target: self))
+        view.addItem(item("Use as Live Wallpaper", #selector(useWallpaper(_:)), target: self))
+        view.addItem(.separator())
+        view.addItem(item("Toggle Full Screen", #selector(toggleFullscreen(_:)), "f", [.command, .control], target: self))
+        let window = submenu("Window", in: bar)
+        window.addItem(item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"))
+        window.addItem(item("Zoom", #selector(NSWindow.performZoom(_:))))
+        window.addItem(item("Close Window", #selector(NSWindow.performClose(_:)), "w"))
+        NSApp.windowsMenu = window
+        NSApp.mainMenu = bar
     }
 
     private func item(_ title: String, _ action: Selector, _ key: String = "",
@@ -81,217 +140,515 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         return entry
     }
 
-    private func submenu(_ title: String, in bar: NSMenu) -> NSMenu {
-        let menu = NSMenu(title: title)
-        let parent = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-        parent.submenu = menu
-        bar.addItem(parent)
-        return menu
+    private func submenu(_ title: String, in parent: NSMenu) -> NSMenu {
+        let child = NSMenu(title: title)
+        let link = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+        link.submenu = child
+        parent.addItem(link)
+        return child
     }
 
-    private func buildMenu() -> NSMenu {
-        let bar = NSMenu()
-        let app = submenu(appName, in: bar)
-        app.addItem(item("About \(appName)", #selector(NSApplication.orderFrontStandardAboutPanel(_:))))
-        app.addItem(.separator())
-        app.addItem(item("Hide \(appName)", #selector(NSApplication.hide(_:)), "h"))
-        app.addItem(item("Hide Others", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]))
-        app.addItem(item("Show All", #selector(NSApplication.unhideAllApplications(_:))))
-        app.addItem(.separator())
-        app.addItem(item("Quit \(appName)", #selector(NSApplication.terminate(_:)), "q"))
-
-        let edit = submenu("Edit", in: bar)
-        for (title, action, key) in [("Undo", "undo:", "z"), ("Redo", "redo:", "Z"),
-                                    ("Cut", "cut:", "x"), ("Copy", "copy:", "c"), ("Paste", "paste:", "v"),
-                                    ("Select All", "selectAll:", "a")] {
-            if title == "Cut" || title == "Select All" { edit.addItem(.separator()) }
-            edit.addItem(item(title, NSSelectorFromString(action), key))
+    @objc private func chooseImage(_ sender: Any?) {
+        if let picker = picker { picker.makeKeyAndOrderFront(nil); return }
+        let panel = NSOpenPanel()
+        panel.title = "Choose Wallpaper Image"
+        panel.prompt = "Use Image"
+        panel.allowedContentTypes = [.image]
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        picker = panel
+        let finish: (NSApplication.ModalResponse) -> Void = { [weak self, weak panel] response in
+            guard let self = self else { return }
+            self.picker = nil
+            guard response == .OK, let url = panel?.url else { return }
+            self.imageRevision += 1
+            let revision = self.imageRevision
+            DispatchQueue.global(qos: .userInitiated).async {
+                let result = Result { try WallpaperImage.convert(url) }
+                DispatchQueue.main.async {
+                    guard self.imageRevision == revision else { return }
+                    do {
+                        let bytes = try result.get()
+                        try self.picture.save(bytes)
+                        self.publishImage()
+                    } catch { self.tellUser(error.localizedDescription) }
+                }
+            }
         }
-
-        let view = submenu("View", in: bar)
-        view.addItem(item("Use as Desktop", #selector(toggleDesktop(_:)), "\r", [.command, .option], target: self))
-        view.addItem(item("Enter Full Screen", #selector(fullScreen(_:)), "f", [.command, .control], target: self))
-        let windows = submenu("Window", in: bar)
-        windows.addItem(item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"))
-        windows.addItem(item("Zoom", #selector(NSWindow.performZoom(_:))))
-        windows.addItem(item("Close Window", #selector(NSWindow.performClose(_:)), "w"))
-        NSApp.windowsMenu = windows
-        return bar
+        NSApp.activate(ignoringOtherApps: true)
+        if let window = preview { panel.beginSheetModal(for: window, completionHandler: finish) }
+        else { panel.begin(completionHandler: finish) }
     }
 
-    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
-        let dock = NSMenu()
-        dock.addItem(item(desktopMode ? "Return to Window" : "Use as Desktop", #selector(toggleDesktop(_:)), target: self))
-        return dock
+    @objc private func restoreAlpine(_ sender: Any?) {
+        imageRevision += 1
+        do { try picture.restoreAlpine(); publishImage() }
+        catch { if smokeTest { fail(error.localizedDescription) } else { tellUser(error.localizedDescription) } }
     }
 
-    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
-        if menuItem.action == #selector(toggleDesktop(_:)) {
-            menuItem.title = desktopMode ? "Return to Window" : "Use as Desktop"
-            return window != nil && !window.styleMask.contains(.fullScreen)
+    private func sendImage(to view: WKWebView, completion: (@MainActor @Sendable (Result<Any, Error>) -> Void)? = nil) {
+        let detail: Any = picture.dataURL as Any? ?? NSNull()
+        let script = """
+        window.dispatchEvent(new CustomEvent('snowfall-image', {detail: value}));
+        await window.snowfallImageReady;
+        const scene = document.querySelector('#wallpaper');
+        if (scene) await scene.decode();
+        """
+        view.callAsyncJavaScript(script, arguments: ["value": detail], in: nil, in: .page, completionHandler: completion)
+    }
+
+    private func publishImage() {
+        alpineChoice.state = picture.dataURL == nil ? .on : .off
+        imageRevision += 1
+        for background in backgrounds.values { sendImage(to: background.view) }
+        if let view = previewView { sendImage(to: view) }
+    }
+
+    @objc private func toggleSnow(_ sender: Any?) {
+        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: snowPreference), forKey: snowPreference)
+        applySnowPreference()
+    }
+
+    @objc private func applySnowPreference() {
+        let movement = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let chosen = UserDefaults.standard.bool(forKey: snowPreference)
+        snowOption.state = chosen ? .on : .off
+        snowOption.toolTip = !movement ? "Paused while Reduce Motion is enabled in macOS."
+            : !webEffectsEnabled ? "Paused by your cabin snowfall settings." : nil
+        snow.setEnabled(!smokeTest && chosen && movement && webEffectsEnabled)
+    }
+
+    private func makeView(surface: String) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = store
+        let controller = config.userContentController
+        controller.add(self, name: "snowfallWindow")
+        var startup = """
+        window.snowfallNative = true;
+        window.snowfallSurface = '\(surface)';
+        const markSurface = () => document.documentElement?.setAttribute('data-surface', window.snowfallSurface);
+        if (document.documentElement) markSurface();
+        else {
+          const rootObserver = new MutationObserver(() => {
+            if (document.documentElement) { markSurface(); rootObserver.disconnect(); }
+          });
+          rootObserver.observe(document, {childList: true});
         }
-        if menuItem.action == #selector(fullScreen(_:)) {
-            menuItem.title = window?.styleMask.contains(.fullScreen) == true ? "Exit Full Screen" : "Enter Full Screen"
-            return window != nil && !desktopMode
-        }
-        return true
-    }
-
-    @objc private func fullScreen(_ sender: Any?) {
-        if desktopMode { toggleDesktop(nil) }
-        window.toggleFullScreen(sender)
-    }
-
-    func userContentController(_ userContentController: WKUserContentController,
-                               didReceive message: WKScriptMessage) {
-        let index = webRoot.appendingPathComponent("index.html").standardizedFileURL
-        guard message.name == "snowfallWindow", message.frameInfo.isMainFrame,
-              message.frameInfo.request.url?.standardizedFileURL == index,
-              message.body as? String == "fullscreen" else { return }
+        """
         if smokeTest {
-            // Exercise the real button and bridge without switching the user's active Space.
-            smokeBridgeReceived = true
-            return
+            startup += """
+            ;window.__cabinRoutes = []; window.__cabinActions = [];
+            window.addEventListener('snowfall-action', event => window.__cabinActions.push(event.detail));
+            window.addEventListener('snowfall-open', event => window.__cabinRoutes.push(event.detail));
+            """
         }
-        fullScreen(nil)
+        controller.addUserScript(WKUserScript(source: "(() => {\(startup)})();", injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        let view = WKWebView(frame: .zero, configuration: config)
+        view.navigationDelegate = self
+        view.underPageBackgroundColor = NSColor(calibratedRed: 0.09, green: 0.14, blue: 0.23, alpha: 1)
+        return view
     }
 
-    func windowDidEnterFullScreen(_ notification: Notification) { notifyFullScreen(true) }
-    func windowDidExitFullScreen(_ notification: Notification) { notifyFullScreen(false) }
-
-    private func notifyFullScreen(_ enabled: Bool) {
-        let detail = enabled ? "true" : "false"
-        webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('snowfall-native-fullscreen', {detail: \(detail)}))")
+    private func load(_ view: WKWebView) {
+        view.loadFileURL(webRoot.appendingPathComponent("index.html"), allowingReadAccessTo: webRoot)
     }
 
-    @objc private func toggleDesktop(_ sender: Any?) {
-        guard !window.styleMask.contains(.fullScreen) else { return }
-        if desktopMode {
-            desktopMode = false
-            window.level = .normal
-            window.collectionBehavior = [.fullScreenPrimary]
-            window.styleMask = standardStyle
-            window.title = appName
-            window.hasShadow = true
-            let restored = window.constrainFrameRect(windowedFrame, to: window.screen ?? NSScreen.main)
-            window.setFrame(restored, display: true)
-            if !smokeTest { window.makeKeyAndOrderFront(nil) }
-        } else {
-            guard let screen = window.screen ?? NSScreen.main else { return }
-            windowedFrame = window.frame
-            if !smokeTest { window.saveFrame(usingName: "CabinWindow") }
-            desktopMode = true
+    private func stop(_ view: WKWebView) {
+        view.navigationDelegate = nil
+        view.configuration.userContentController.removeScriptMessageHandler(forName: "snowfallWindow")
+        view.stopLoading()
+        view.removeFromSuperview()
+    }
+
+    private func screenID(_ screen: NSScreen) -> NSNumber? {
+        screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber
+    }
+
+    private func syncScreens() {
+        let live = Set(NSScreen.screens.compactMap(screenID))
+        for id in Array(backgrounds.keys) where !live.contains(id) {
+            if let dropped = backgrounds.removeValue(forKey: id) {
+                stop(dropped.view)
+                dropped.window.close()
+            }
+        }
+        for screen in NSScreen.screens {
+            guard let id = screenID(screen) else { continue }
+            if let existing = backgrounds[id] {
+                existing.window.setFrame(screen.frame, display: true)
+                continue
+            }
+            let window = WallpaperWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
+            window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1)
             window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
-            window.styleMask = .borderless
+            window.isReleasedWhenClosed = false
+            window.isExcludedFromWindowsMenu = true
             window.hasShadow = false
-            // Sit just above Finder's icons to receive clicks, below ordinary app windows.
-            window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) + 1)
-            window.setFrame(screen.visibleFrame, display: true)
-            if !smokeTest { window.orderFront(nil) }
+            window.ignoresMouseEvents = true
+            window.canHide = false
+            window.hidesOnDeactivate = false
+            window.animationBehavior = .none
+            window.setFrame(screen.frame, display: false)
+            if smokeTest { window.alphaValue = 0 }
+            let view = makeView(surface: "wallpaper")
+            window.contentView = view
+            backgrounds[id] = Background(window: window, view: view)
+            load(view)
         }
     }
 
     func applicationDidChangeScreenParameters(_ notification: Notification) {
-        if desktopMode, let screen = window.screen ?? NSScreen.main {
-            window.setFrame(screen.visibleFrame, display: true)
-        }
+        if webRoot != nil { syncScreens() }
     }
 
-    func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
-                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        guard let url = action.request.url, url.isFileURL,
-              url.standardizedFileURL.path.hasPrefix(webRoot.path + "/") else {
-            decisionHandler(.cancel)
+    private var activeScreen: NSScreen? {
+        NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main
+    }
+
+    @objc private func rollSnow(_ sender: Any?) { performWallpaperAction("roll") }
+    @objc private func sendPlow(_ sender: Any?) { performWallpaperAction("plow") }
+    private func performWallpaperAction(_ action: String) {
+        guard let screen = activeScreen, let id = screenID(screen), let background = backgrounds[id] else { return }
+        if background.ready { send(action, to: background.view) }
+        else if background.pendingActions.count < 6 { backgrounds[id]?.pendingActions.append(action) }
+    }
+
+    private func send(_ action: String, to view: WKWebView) {
+        view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-action', {detail: action}));",
+                                 arguments: ["action": action], in: nil, in: .page)
+    }
+
+    @objc private func play(_ sender: Any?) { show(.yard) }
+    @objc private func tools(_ sender: Any?) { show(.tools) }
+    @objc private func returnToPreview(_ sender: Any?) { show(.scene) }
+    @objc private func useWallpaper(_ sender: Any?) { preview?.close() }
+    @objc private func toggleFullscreen(_ sender: Any?) { preview?.toggleFullScreen(sender) }
+
+    private func show(_ route: Route) {
+        routeRevision += 1
+        desiredRoute = route
+        if preview != nil {
+            if previewReady { routePreview() }
             return
         }
-        decisionHandler(.allow)
+        let visible = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1280, height: 800)
+        let frame = NSRect(x: 0, y: 0, width: min(1280, visible.width * 0.92), height: min(810, visible.height * 0.91))
+        let window = NSWindow(contentRect: frame, styleMask: [.titled, .closable, .resizable, .miniaturizable],
+                              backing: .buffered, defer: false)
+        window.title = appName
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.contentMinSize = NSSize(width: 390, height: 475)
+        window.collectionBehavior = [.fullScreenPrimary]
+        window.isReleasedWhenClosed = false
+        window.delegate = self
+        window.center()
+        if !smokeTest { _ = window.setFrameUsingName("SnowfallPreview") }
+        let view = makeView(surface: "preview")
+        window.contentView = view
+        preview = window
+        previewView = view
+        previewReady = false
+        load(view)
     }
 
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        fail("The cabin page could not open. \(error.localizedDescription)")
-    }
-
-    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        fail("The cabin page could not load. \(error.localizedDescription)")
-    }
-
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        guard smokeTest else { return }
-        toggleDesktop(nil)
-        guard desktopMode, window.level.rawValue < NSWindow.Level.normal.rawValue else {
-            fail("Desktop mode did not lower the cabin below regular windows.")
-            return
-        }
-        toggleDesktop(nil)
-        guard !desktopMode, window.level == .normal, window.styleMask == standardStyle else {
-            fail("Window mode did not restore the title bar and window level.")
-            return
-        }
-        // This ephemeral session never opens the user's persistent notes or timer.
-        let check = """
-        const assert = (condition, message) => { if (!condition) throw new Error(message); };
-        assert(document.title && document.body.querySelector('button'), 'Desktop controls missing');
-        const scene = new Image();
-        scene.src = 'assets/winter.webp';
-        await scene.decode();
-        assert(scene.naturalWidth > 500, 'Winter scene could not be decoded');
-        for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
-            assert(link.sheet, 'Missing stylesheet: ' + link.getAttribute('href'));
-        }
-        for (const family of ['Pixelify Sans', 'DM Sans']) {
-            const result = await document.fonts.load('16px "' + family + '"');
-            assert(result.length > 0 && result[0].status === 'loaded', 'Missing font: ' + family);
-        }
-        const openApp = name => document.querySelector('#dock [data-open="' + name + '"]').click();
-        assert(document.querySelector('[data-kind="radio"]'), 'Radio did not open on startup');
-        openApp('notes');
-        const note = document.querySelector('[data-kind="notes"] textarea');
-        note.value = 'Hello from the Mac cabin';
-        note.dispatchEvent(new Event('input', {bubbles: true}));
-        document.querySelector('[data-kind="notes"] .close').click();
-        openApp('notes');
-        assert(document.querySelector('[data-kind="notes"] textarea').value === note.value, 'Note did not reopen');
-        assert(JSON.parse(localStorage.getItem('snowfall-os.notes')) === note.value, 'Local storage failed');
-        openApp('focus');
-        document.querySelector('[data-kind="focus"] [data-mode="break"]').click();
-        assert(document.querySelector('[data-kind="focus"] [role="timer"]').textContent === '05:00', 'Break timer switch failed');
-        openApp('yard');
-        assert(!document.querySelector('.yard-field').hidden, 'Snow yard did not open');
-        document.querySelector('#back-to-desk').click();
-        assert(document.querySelector('.yard-field').hidden, 'Snow yard did not close');
-        document.querySelector('#fullscreen').click();
-        return 'Loaded ' + document.title + ' with its scene and fonts. Notes, timer, yard, desktop mode and native window controls passed.';
+    private func routePreview() {
+        guard let window = preview, let view = previewView else { return }
+        let route = desiredRoute
+        let revision = routeRevision
+        let js = """
+        window.dispatchEvent(new CustomEvent('snowfall-surface', {detail: 'preview'}));
+        if (route !== 'scene') window.dispatchEvent(new CustomEvent('snowfall-open', {detail: route}));
         """
-        webView.callAsyncJavaScript(check, arguments: [:], in: nil, in: .page) { [weak self] result in
-            self?.smokeDeadline?.invalidate()
-            switch result {
-            case .success(let message):
-                guard self?.smokeBridgeReceived == true else {
-                    self?.fail("The app's full-screen button did not reach the native window bridge.")
-                    return
-                }
-                print(message)
-                NSApp.terminate(nil)
-            case .failure(let error):
-                let detail = (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String
-                self?.fail(detail ?? String(describing: error))
+        view.callAsyncJavaScript(js, arguments: ["route": route.rawValue], in: nil, in: .page) { [weak self, weak window] result in
+            guard let self = self, let window = window, self.preview === window, self.routeRevision == revision else { return }
+            if case .failure(let error) = result { self.fail(error.localizedDescription); return }
+            if smokeTest {
+                self.inspectPreview(route, view: view)
+            } else {
+                NSApp.setActivationPolicy(.regular)
+                if window.isMiniaturized { window.deminiaturize(nil) }
+                window.makeKeyAndOrderFront(nil)
+                NSApp.activate(ignoringOtherApps: true)
             }
         }
     }
 
-    private func fail(_ message: String) {
-        FileHandle.standardError.write(Data((message + "\n").utf8))
-        if smokeTest { exit(1) }
+    func windowWillClose(_ notification: Notification) {
+        guard let closed = notification.object as? NSWindow, closed === preview else { return }
+        if !smokeTest && !closed.styleMask.contains(.fullScreen) { closed.saveFrame(usingName: "SnowfallPreview") }
+        if let view = previewView { stop(view) }
+        closed.contentView = nil
+        preview = nil
+        previewView = nil
+        previewReady = false
+        if !smokeTest { NSApp.setActivationPolicy(.accessory) }
+    }
+
+    func windowDidEnterFullScreen(_ notification: Notification) { notifyFullScreen(true) }
+    func windowDidExitFullScreen(_ notification: Notification) { notifyFullScreen(false) }
+    private func notifyFullScreen(_ enabled: Bool) {
+        previewView?.evaluateJavaScript("window.dispatchEvent(new CustomEvent('snowfall-native-fullscreen', {detail: \(enabled)}))")
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        show(.scene)
+        return true
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        snow.shutdown()
+        if smokeTest { try? FileManager.default.removeItem(at: picture.directory) }
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+        if let monitor = escapeMonitor { NSEvent.removeMonitor(monitor) }
+        if !smokeTest, let window = preview, !window.styleMask.contains(.fullScreen) { window.saveFrame(usingName: "SnowfallPreview") }
+        for background in backgrounds.values { background.window.orderOut(nil) }
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        guard message.name == "snowfallWindow", let sender = message.webView,
+              message.frameInfo.isMainFrame,
+              message.frameInfo.request.url?.standardizedFileURL == webRoot.appendingPathComponent("index.html").standardizedFileURL,
+              let command = message.body as? String else { return }
+        if command == "effectsOn" || command == "effectsOff" {
+            guard sender === previewView || backgrounds.values.contains(where: { $0.view === sender }) else { return }
+            webEffectsEnabled = command == "effectsOn"
+            applySnowPreference()
+            return
+        }
+        guard sender === previewView else { return }
+        switch command {
+        case "wallpaper": useWallpaper(nil)
+        case "play": show(.yard)
+        case "tools": show(.tools)
+        case "preview": show(.scene)
+        case "fullscreen":
+            if smokeTest { smokeBridgeReceived = true } else { toggleFullscreen(nil) }
+        case "notes", "music", "clock": openNativeApp(command)
+        default: break
+        }
+    }
+
+    @objc private func openNativeAppFromMenu(_ sender: NSMenuItem) {
+        if let command = sender.representedObject as? String { openNativeApp(command) }
+    }
+
+    private func openNativeApp(_ command: String) {
+        guard !smokeTest, let bundle = ["notes": "com.apple.Notes", "music": "com.apple.Music", "clock": "com.apple.clock"][command] else { return }
+        let name = command.capitalized
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundle) else {
+            tellUser("\(name) could not be found on this Mac.")
+            return
+        }
+        NSWorkspace.shared.openApplication(at: url, configuration: .init()) { [weak self] _, error in
+            if let error = error {
+                DispatchQueue.main.async { self?.tellUser("\(name) could not open. \(error.localizedDescription)") }
+            }
+        }
+    }
+
+    private func tellUser(_ message: String) {
         let alert = NSAlert()
-        alert.messageText = "Snowfall OS could not start"
+        alert.messageText = appName
         alert.informativeText = message
+        if let window = preview { alert.beginSheetModal(for: window) }
+        else { NSApp.activate(ignoringOtherApps: true); alert.runModal() }
+    }
+
+    func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
+                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+        let index = webRoot.appendingPathComponent("index.html").standardizedFileURL
+        decisionHandler(action.request.url?.standardizedFileURL == index ? .allow : .cancel)
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        initializeImage(in: webView)
+    }
+
+    private func initializeImage(in view: WKWebView) {
+        let revision = imageRevision
+        sendImage(to: view) { [weak self, weak view] result in
+            guard let self = self, let view = view,
+                  self.previewView === view || self.backgrounds.values.contains(where: { $0.view === view }) else { return }
+            if revision != self.imageRevision { self.initializeImage(in: view); return }
+            if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
+            self.finishSurface(view)
+        }
+    }
+
+    private func finishSurface(_ webView: WKWebView) {
+        if webView === previewView {
+            previewReady = true
+            routePreview()
+            return
+        }
+        guard let id = backgrounds.first(where: { $0.value.view === webView })?.key else { return }
+        // Apply the wallpaper presentation and decode the image before displaying the native window.
+        let script = """
+        window.dispatchEvent(new CustomEvent('snowfall-surface', {detail: 'wallpaper'}));
+        const artwork = document.querySelector('#wallpaper');
+        if (!window.snowfallNative || window.snowfallSurface !== 'wallpaper' || !artwork?.naturalWidth)
+          throw new Error('The packaged wallpaper is unavailable.');
+        """
+        webView.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { [weak self, weak webView] result in
+            guard let self = self, let current = self.backgrounds[id], current.view === webView else { return }
+            if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
+            self.backgrounds[id]?.ready = true
+            current.window.orderFrontRegardless()
+            self.backgrounds[id]?.pendingActions.removeAll()
+            for action in current.pendingActions { self.send(action, to: current.view) }
+            if smokeTest { self.inspectBackgrounds() }
+        }
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        if (error as NSError).code != NSURLErrorCancelled { fail(error.localizedDescription) }
+    }
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        if (error as NSError).code != NSURLErrorCancelled { fail(error.localizedDescription) }
+    }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) { load(webView) }
+
+    private func inspectBackgrounds() {
+        guard !smokeBegan, !backgrounds.isEmpty, backgrounds.values.allSatisfy({ $0.ready }) else { return }
+        smokeBegan = true
+        for screen in NSScreen.screens {
+            guard let id = screenID(screen), let window = backgrounds[id]?.window,
+                  window.level.rawValue > Int(CGWindowLevelForKey(.desktopWindow)),
+                  window.level.rawValue < Int(CGWindowLevelForKey(.desktopIconWindow)),
+                  window.ignoresMouseEvents, !window.canBecomeKey, !window.canBecomeMain,
+                  window.isVisible, window.frame.equalTo(screen.frame),
+                  window.collectionBehavior.contains(.canJoinAllSpaces) else {
+                fail("A wallpaper did not cover its display below Finder icons with input passing through.")
+                return
+            }
+        }
+        guard let screen = activeScreen, let id = screenID(screen), let view = backgrounds[id]?.view else {
+            fail("No display available to test a wallpaper action.")
+            return
+        }
+        let before = """
+        const controls = document.querySelector('#surface-controls');
+        if (!controls || controls.getClientRects().length && getComputedStyle(controls).visibility !== 'hidden')
+          throw new Error('Interactive controls are visible on the wallpaper.');
+        if (!(document.querySelector('#wallpaper')?.naturalWidth > 1000)) throw new Error('Full wallpaper asset is missing.');
+        if (Number(localStorage.getItem('snowfall-os.snowman') || 0) !== 0) throw new Error('The isolated snow yard did not start empty.');
+        """
+        view.callAsyncJavaScript(before, arguments: [:], in: nil, in: .page) { [weak self] result in
+            guard let self = self else { return }
+            if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
+            self.rollSnow(nil)
+            self.sendPlow(nil)
+            self.checkWallpaperActions(view)
+        }
+    }
+
+    private func checkWallpaperActions(_ view: WKWebView) {
+        let script = """
+        const ready = () => localStorage.getItem('snowfall-os.snowman') === '1' && document.querySelector('.yard-bank');
+        const deadline = Date.now() + 18000;
+        while (!ready() && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 120));
+        if (window.__cabinActions.join(',') !== 'roll,plow') throw new Error('The wallpaper actions did not arrive.');
+        if (!ready()) throw new Error('A wallpaper roll or plow did not complete.');
+        """
+        view.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { [weak self] result in
+            guard let self = self else { return }
+            if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
+            do {
+                try self.picture.loadTestPicture()
+                self.publishImage()
+                view.callAsyncJavaScript("await window.snowfallImageReady; const img = document.querySelector('#wallpaper'); await img.decode(); return img.currentSrc.startsWith('data:image/jpeg;base64,') && img.naturalHeight === 4096;",
+                                         arguments: [:], in: nil, in: .page) { result in
+                    guard case .success(let value) = result, value as? Bool == true else {
+                        self.fail("The wallpaper did not display the resized test picture."); return
+                    }
+                    self.show(.tools)
+                }
+            } catch { self.fail(error.localizedDescription) }
+        }
+    }
+
+    private func inspectPreview(_ route: Route, view: WKWebView) {
+        guard let window = preview, window.level == .normal, !window.ignoresMouseEvents,
+              window.styleMask.contains(.titled), backgrounds.values.allSatisfy({ $0.window.isVisible }) else {
+            fail("The interactive window and the live wallpaper did not coexist.")
+            return
+        }
+        let script = """
+        if (!window.snowfallNative || window.snowfallSurface !== 'preview' || window.__cabinRoutes[window.__cabinRoutes.length - 1] !== route)
+          throw new Error('The interactive surface did not receive its route: ' + route);
+        if (!document.querySelector('#wallpaper')?.currentSrc.startsWith('data:image/jpeg;base64,')) throw new Error('The new interactive window did not inherit the chosen photo.');
+        if (route === 'yard' && !document.querySelector('.yard-field:not([hidden])')) throw new Error('The snow yard did not open.');
+        if (route === 'tools') {
+          if (!document.querySelector('#tools-panel:not([hidden])')) throw new Error('The cabin tools did not open.');
+          localStorage.setItem('snowfall-native-smoke', 'ok');
+          if (localStorage.getItem('snowfall-native-smoke') !== 'ok') throw new Error('Local storage failed.');
+          localStorage.removeItem('snowfall-native-smoke');
+        }
+        for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+          if (!link.sheet) throw new Error('A stylesheet is missing: ' + link.href);
+        }
+        window.webkit.messageHandlers.snowfallWindow.postMessage('fullscreen');
+        """
+        view.callAsyncJavaScript(script, arguments: ["route": route.rawValue], in: nil, in: .page) { [weak self] result in
+            guard let self = self else { return }
+            if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
+            guard self.smokeBridgeReceived else { self.fail("The local native window bridge did not receive the test action."); return }
+            if route == .tools { self.play(nil); return }
+            self.useWallpaper(nil)
+            guard self.preview == nil, self.backgrounds.values.allSatisfy({ $0.window.isVisible }) else {
+                self.fail("Closing play did not return to the live wallpaper.")
+                return
+            }
+            self.checkImageReset()
+        }
+    }
+
+    private func checkImageReset() {
+        restoreAlpine(nil)
+        guard !FileManager.default.fileExists(atPath: picture.file.path), let view = backgrounds.values.first?.view else {
+            fail("The bundled wallpaper could not be restored."); return
+        }
+        let check = "await window.snowfallImageReady; const img = document.querySelector('#wallpaper'); await img.decode(); return img.currentSrc.endsWith('/assets/scene.jpg') && img.naturalWidth > 1000;"
+        view.callAsyncJavaScript(check, arguments: [:], in: nil, in: .page) { [weak self] result in
+            guard let self = self else { return }
+            guard case .success(let value) = result, value as? Bool == true else {
+                self.fail("The restored alpine scene did not appear."); return
+            }
+            self.smokeDeadline?.invalidate()
+            print("PASS: click-through wallpaper on \(self.backgrounds.count) display(s), roll and plow, native tools and play, local storage, trusted bridge, local picture conversion/selection, and restoring the alpine scene.")
+            NSApp.terminate(nil)
+        }
+    }
+
+    private func errorMessage(_ error: Error) -> String {
+        (error as NSError).userInfo["WKJavaScriptExceptionMessage"] as? String ?? error.localizedDescription
+    }
+
+    @objc private func smokeTimeout() { fail("Timed out waiting for the wallpaper or its interactive window.") }
+
+    private func fail(_ message: String) {
+        guard !failing else { return }
+        failing = true
+        FileHandle.standardError.write(Data((message + "\n").utf8))
+        if smokeTest { try? FileManager.default.removeItem(at: picture.directory); exit(1) }
+        let alert = NSAlert()
+        alert.messageText = "\(appName) could not start"
+        alert.informativeText = message
+        NSApp.activate(ignoringOtherApps: true)
         alert.runModal()
         NSApp.terminate(nil)
     }
 }
 
-let app = NSApplication.shared
-private let delegate = CabinApp()
-app.setActivationPolicy(smokeTest ? .accessory : .regular)
-app.delegate = delegate
-app.run()
+@main
+private enum Snowfall {
+    @MainActor static func main() {
+        let app = NSApplication.shared
+        let delegate = CabinApp()
+        app.setActivationPolicy(.accessory)
+        app.delegate = delegate
+        withExtendedLifetime(delegate) { app.run() }
+    }
+}

@@ -1,79 +1,110 @@
-/* Window content only. The desktop owns the frame, title bar and placement. */
+/* The window frame supplies the glass material and shadow. */
 .snow-app {
-  --sa-ink: #f3e8ec;
-  --sa-soft: #d0bed8;
-  --sa-line: #756781;
-  --sa-inset: #282338;
-  --sa-peach: #ffd3b0;
+  --sa-ink: #f4f7fb;
+  --sa-secondary: #c3d0dd;
+  --sa-line: rgb(211 231 255 / 15%);
+  --sa-inset: rgb(9 23 40 / 32%);
+  --sa-fill: rgb(203 221 240 / 10%);
+  --sa-blue: #c4ddf3;
   box-sizing: border-box;
   width: 100%;
-  padding: clamp(14px, 3vw, 22px);
-  background: #352d43;
+  padding: 16px 18px 18px;
   color: var(--sa-ink);
-  font-family: inherit;
-  font-size: 15px;
-  line-height: 1.45;
+  background: linear-gradient(155deg, rgb(56 75 93 / 31%), rgb(16 34 54 / 34%));
+  font: 400 14px/1.48 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   text-align: left;
   color-scheme: dark;
 }
 .snow-app *, .snow-app *::before, .snow-app *::after { box-sizing: border-box; }
 .snow-app h3, .snow-app p { margin: 0; }
-.snow-app h3 { color: var(--sa-peach); font-size: 1.35rem; line-height: 1.17; }
+.snow-app h3 { color: var(--sa-ink); font-size: 20px; font-weight: 630; line-height: 1.22; letter-spacing: -.025em; }
 .snow-app button, .snow-app textarea { font: inherit; }
 .snow-app button {
   appearance: none;
+  min-height: 38px;
+  padding: 8px 13px;
   border: 1px solid var(--sa-line);
-  border-radius: 5px;
-  padding: 8px 12px;
-  background: #44394f;
+  border-radius: 9px;
   color: var(--sa-ink);
+  background: var(--sa-fill);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 4%);
   cursor: pointer;
-  text-align: center;
 }
-.snow-app button:hover:enabled { background: #57485f; border-color: #c3abc9; }
-.snow-app button:disabled { cursor: default; opacity: .5; }
-.snow-app :focus-visible { outline: 2px solid #ffdaab; outline-offset: 2px; }
+.snow-app button:hover:enabled { background: rgb(205 225 245 / 17%); }
+.snow-app button:active:enabled { background: rgb(205 225 245 / 23%); }
+.snow-app button:disabled { cursor: default; opacity: .44; }
+.snow-app :focus-visible { outline: 2px solid #a9d5ff; outline-offset: 2px; }
 .snow-app h3:focus { outline: none; }
-.snow-app .sa-primary { background: var(--sa-peach); color: #352a37; border-color: var(--sa-peach); font-weight: 700; }
-.snow-app .sa-primary:hover:enabled { background: #ffe4c9; color: #2c2031; }
-.sa-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; color: var(--sa-soft); font-size: 12px; }
-.sa-editor { display: grid; gap: 10px; font-weight: 650; color: var(--sa-peach); }
-.sa-editor textarea {
-  width: 100%; min-height: 96px; max-height: 42vh;
-  resize: vertical; padding: 10px 12px; background: var(--sa-inset); color: var(--sa-ink);
-  border: 1px solid var(--sa-line); border-radius: 5px; font-weight: 400; line-height: 1.6;
+.snow-app .sa-primary {
+  color: #152738;
+  background: var(--sa-blue);
+  border-color: transparent;
+  font-weight: 630;
 }
-.sa-editor textarea::placeholder { color: #b6a5c0; }
+.snow-app .sa-primary:hover:enabled { background: #deedfa; }
+.sa-meta {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px;
+  color: var(--sa-secondary); font-size: 12px; line-height: 1.35;
+}
+.sa-editor { display: grid; gap: 9px; font-weight: 590; }
+.sa-editor textarea {
+  width: 100%; min-height: 100px; max-height: 42vh;
+  resize: vertical; padding: 11px 12px;
+  color: var(--sa-ink); background: var(--sa-inset);
+  border: 1px solid var(--sa-line); border-radius: 10px; font-weight: 400; line-height: 1.55;
+}
+.sa-editor textarea::placeholder { color: #b7c5d3; opacity: 1; }
 .sa-notes .sa-meta { margin-top: 9px; }
-.sa-segment { display: flex; gap: 3px; padding: 3px; background: var(--sa-inset); border: 1px solid var(--sa-line); border-radius: 6px; }
-.sa-segment button { flex: 1; border: 1px solid transparent; background: transparent; padding: 6px; font-size: 14px; }
-.snow-app button[aria-pressed="true"] { background: #67516d; border-color: #b59abb; color: #fff3e6; }
-.sa-face { margin: 12px 0 16px; text-align: center; }
-.sa-time { color: var(--sa-peach); font: 650 clamp(40px, 10vw, 60px)/1.4 ui-monospace, monospace; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
-.sa-timer-caption { color: var(--sa-soft); font-size: 13px; }
+.sa-segment {
+  display: flex; gap: 2px; padding: 3px;
+  background: var(--sa-inset); border: 1px solid rgb(210 230 250 / 8%); border-radius: 11px;
+}
+.sa-segment button {
+  flex: 1; padding: 4px 6px; min-height: 31px; border: 0; border-radius: 8px;
+  background: transparent; box-shadow: none; color: #d3dee7; font-size: 13px; line-height: 1.35;
+}
+.snow-app button[aria-pressed="true"] {
+  background: rgb(176 201 223 / 24%); border-color: rgb(196 220 243 / 35%); color: white;
+}
+.sa-segment button[aria-pressed="true"] { box-shadow: 0 1px 4px rgb(4 14 25 / 22%), inset 0 1px 0 rgb(255 255 255 / 10%); }
+.sa-face { margin: 18px 0 20px; text-align: center; }
+.sa-time { font-size: clamp(44px, 8vw, 57px); font-weight: 310; line-height: 1.18; letter-spacing: -.065em; font-variant-numeric: tabular-nums; }
+.sa-timer-caption { margin-top: 5px !important; color: var(--sa-secondary); font-size: 12px; }
 .sa-actions { display: flex; justify-content: space-between; gap: 8px; }
 .sa-focus .sa-actions button { flex: 1; }
 .sa-guide { display: grid; gap: 10px; }
-.sa-lesson-step { font-size: 12px; color: #cdb6db; letter-spacing: .065em; text-transform: uppercase; }
-.sa-guide .sa-question { margin-top: 4px; font-weight: 650; }
+.sa-lesson-step { color: var(--sa-secondary); font-size: 12px; font-weight: 560; }
+.sa-guide .sa-question { margin-top: 3px; font-weight: 630; }
 .sa-choices { display: grid; gap: 6px; }
-.sa-choices .sa-choice { text-align: left; line-height: 1.35; }
-.sa-guide .sa-feedback { color: #ffd8bc; font-size: 14px; padding-left: 10px; border-left: 2px solid currentColor; }
+.sa-choices .sa-choice { text-align: left; line-height: 1.36; }
+.sa-guide .sa-feedback { color: #f1dcc5; padding: 3px 0 3px 10px; border-left: 2px solid #d7b28b; font-size: 13px; }
 .sa-guide .sa-feedback:empty { display: none; }
-.sa-guide .sa-correct { color: #c6e1c2; }
-.sa-guide .sa-actions { margin-top: 5px; }
+.sa-guide .sa-correct { color: #cce6dd; border-color: #9ac4b5; }
+.sa-guide .sa-actions { margin-top: 4px; }
 .sa-guide > .sa-primary { justify-self: start; }
 .sa-field { min-width: 0; padding: 0; margin: 0; border: 0; }
-.sa-field legend { margin-bottom: 9px; padding: 0; font-weight: 650; color: var(--sa-peach); }
-.sa-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; margin: 14px 0 0; border-top: 1px solid var(--sa-line); cursor: pointer; }
-.sa-switch-row small { display: block; margin-top: 2px; color: var(--sa-soft); font-size: 13px; }
-.sa-switch-row input {
-  flex: 0 0 auto; appearance: none; width: 40px; height: 23px; margin: 0;
-  padding: 3px; border: 1px solid var(--sa-line); border-radius: 20px; background: var(--sa-inset); cursor: pointer;
+.sa-field legend { padding: 0; margin-bottom: 9px; font-weight: 620; }
+.sa-switch-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding: 16px 0; margin-top: 17px; border-top: 1px solid var(--sa-line); cursor: pointer;
 }
-.sa-switch-row input::before { display: block; content: ''; width: 15px; height: 15px; background: #e6d5eb; border-radius: 50%; }
-.sa-switch-row input:checked { background: #806988; }
-.sa-switch-row input:checked::before { transform: translateX(17px); background: #fff2db; }
+.sa-switch-row strong { font-weight: 590; }
+.sa-switch-row small { display: block; margin-top: 2px; color: var(--sa-secondary); font-size: 12px; }
+.sa-switch-row input {
+  flex: 0 0 auto; appearance: none; width: 39px; height: 23px; margin: 0;
+  padding: 2px; border: 1px solid rgb(220 233 246 / 24%); border-radius: 20px;
+  background: rgb(199 217 236 / 17%); cursor: pointer;
+}
+.sa-switch-row input::before {
+  display: block; content: ''; width: 17px; height: 17px; border-radius: 50%;
+  background: #f1f5fa; box-shadow: 0 1px 3px rgb(0 10 20 / 35%);
+}
+.sa-switch-row input:checked { border-color: #91bddb; background: #77a6c7; }
+.sa-switch-row input:checked::before { transform: translateX(16px); background: white; }
+@media (pointer: coarse) {
+  .snow-app button { min-height: 44px; }
+  .sa-segment button { min-height: 40px; }
+}
 @media (forced-colors: active) {
   .sa-switch-row input { appearance: auto; }
   .sa-switch-row input::before { display: none; }

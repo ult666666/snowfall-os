@@ -1,17 +1,21 @@
 /* All yard coordinates are percentages of the scene. Objects follow the landscape on resize. */
 (() => {
   'use strict';
-  const sprites = 'assets/icons/';
+  const sprites = 'assets/props/';
   const snowStages = ['', 'yard-snow-base', 'yard-snow-middle', 'snowman'];
-  const buildSite = { x: 70, y: 78 };
-  const parking = { x: 14, y: 91 };
-  const pileSpots = [{ x: 32, y: 83 }, { x: 56, y: 90 }, { x: 78, y: 81 }];
-  const positions = [{ x: 69, y: 74 }, { x: 44, y: 79 }, { x: 77, y: 83 }, { x: 54, y: 72 }];
+  const buildSite = { x: 68, y: 85 };
+  const parking = { x: 20, y: 89 };
+  const pileSpots = [{ x: 35, y: 87 }, { x: 54, y: 92 }, { x: 79, y: 84 }];
+  const positions = [{ x: 67, y: 81 }, { x: 43, y: 86 }, { x: 77, y: 87 }, { x: 54, y: 81 }];
   const lanes = [28, 50, 72];
   const storageKey = 'snowfall-os.snowman';
   const titles = { build: 'Build a snowman', plow: 'Clear the path', fight: 'Snowball fight' };
   let host, shell, field, props, effects, control, message, modeTabs, onEnter;
-  let desktopSnowman;
+  let desktopSnowman, parked, ambientLayer;
+  let ambientOperation = null;
+  const ambientQueue = [];
+  let plowVisited = false;
+  let localStageOnly = false;
   let active = false;
   let mode = 'build';
   let snowmanLevel = 0;
@@ -46,7 +50,7 @@
     node.style.top = point.y + '%';
     return node;
   }
-  function prop(name, point, className, label, handler) {
+  function prop(name, point, className, label, handler, layer = props) {
     const object = handler ? action('', handler) : element('div');
     object.className = 'yard-prop ' + className;
     object.append(sprite(name));
@@ -54,7 +58,7 @@
       object.setAttribute('aria-label', label);
       object.title = label;
     }
-    props.append(place(object, point));
+    layer.append(place(object, point));
     return object;
   }
   function later(handler, delay) {
@@ -72,6 +76,7 @@
   }
   function applyMotion() { shell?.classList.toggle('yard-still', reduced()); }
   function loadLevel() {
+    if (localStageOnly) return snowmanLevel;
     try {
       const raw = Number(window.localStorage.getItem(storageKey));
       if (Number.isInteger(raw) && raw >= 0 && raw <= 3) return raw;
@@ -79,7 +84,7 @@
     return snowmanLevel;
   }
   function saveLevel() {
-    try { window.localStorage.setItem(storageKey, String(snowmanLevel)); } catch { /* Session state remains available. */ }
+    try { window.localStorage.setItem(storageKey, String(snowmanLevel)); localStageOnly = false; } catch { localStageOnly = true; }
   }
   function say(text) { message.textContent = text; }
   function puff(at, text) {
@@ -87,9 +92,28 @@
     effects.append(place(particle, at));
     later(() => particle.remove(), 900);
   }
-  function animate(node, frames, duration) {
+  function travel(node, points, duration, anchor = '-100%') {
+    const end = points[points.length - 1];
+    place(node,end);
     if (!node.animate || reduced()) return;
-    node.animate(frames, { duration, easing: 'ease-in-out', fill: 'both' });
+    const bounds = shell.getBoundingClientRect();
+    const frames = points.map(point => {
+      const dx = (point.x - end.x) * bounds.width / 100;
+      const dy = (point.y - end.y) * bounds.height / 100;
+      const transform = 'translate(-50%,' + anchor + ') translate3d(' + dx + 'px,' + dy + 'px,0) rotate(' + (point.angle || 0) + 'deg) scale(' + (point.size || 1) + ',' + (point.height || point.size || 1) + ')';
+      return point.offset === undefined ? {transform} : {transform,offset:point.offset};
+    });
+    node.getAnimations?.().forEach(animation => animation.cancel());
+    node.animate(frames, {duration, easing:'cubic-bezier(.33,.02,.23,1)', fill:'none'});
+  }
+  function move(node, end, duration) {
+    travel(node,[{x:parseFloat(node.style.left),y:parseFloat(node.style.top)},end],duration);
+  }
+  function rollMotion(ball, start, level, ms) {
+    const height = Math.min(140, shell.clientWidth * .087) / Math.max(shell.clientHeight,1) * 100;
+    const targetY = buildSite.y - height * [.10,.35,.58][level];
+    travel(ball,[{...start, size:.7}, {x:buildSite.x-9,y:buildSite.y+1,angle:206,size:1.04,offset:.68},
+      {x:buildSite.x-2,y:targetY-1.5,angle:295}, {x:buildSite.x,y:targetY,angle:326}],ms);
   }
   function resetScene() {
     clearJobs();
@@ -131,18 +155,17 @@
       const ms = reduced() ? 140 : 1150;
       say('Rolling the ' + parts[level] + ' into place…');
       const lastY = buildSite.y - 1 - level * 2.8;
-      const at = (x, y, spin, size) => ({ left: x + '%', top: y + '%', transform: 'translate(-50%, -100%) rotate(' + spin + 'deg) scale(' + size + ')' });
-      animate(ball, [at(start.x,start.y,0,.72), { ...at(62,83,260,1.1), offset: .68 }, at(buildSite.x,lastY-3,335,1.05), at(buildSite.x,lastY,360,.96)], ms);
+      rollMotion(ball,start,level,ms);
       later(() => {
         pendingAction = false;
-        snowmanLevel = level + 1;
+        snowmanLevel = Math.max(loadLevel(),level + 1);
         saveLevel(); build();
         puff({x:buildSite.x,y:lastY-5}, level === 2 ? 'Flurry!' : '+1 stacked');
       }, ms);
     }
   }
 
-  function tracks() {
+  function tracks(layer = props) {
     const ns = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(ns, 'svg');
     svg.setAttribute('class', 'yard-tracks'); svg.setAttribute('viewBox', '0 0 100 100');
@@ -157,7 +180,7 @@
       };
       add('yard-clearing', -.3); add('yard-tread', -.64); add('yard-tread', .04);
     }
-    props.append(svg);
+    layer.append(svg);
   }
   function renderPlow() {
     props.replaceChildren(); control.replaceChildren(); tracks();
@@ -193,16 +216,26 @@
       Array.from(props.querySelectorAll('button')).forEach(b => { b.disabled=true; });
       control.querySelector('button').disabled = true;
       say('Plowing the path…');
-      vehicle.classList.toggle('yard-left', start.x > end.x);
-      animate(vehicle, [{ left:start.x+'%', top:start.y+'%' },{ left:end.x+'%', top:end.y+'%' }], ms);
-      const resting = {left:end.x+'%', top:end.y+'%', transform:'translate(-50%,-100%) scale(1)'};
-      animate(pile, [resting, {...resting, offset:.68}, {left:bank.x+'%', top:bank.y+'%', transform:'translate(-50%,-100%) scale(.7,.55)'}], ms);
+      driveMotion(vehicle,pile,start,end,bank,ms);
       later(() => {
         pendingAction = false;
-        plow.cleared.push(index); plow.trails.push({index,start,end,bank}); plow.at = end;
+        completeDrive(index,start,end,bank);
         renderPlow(); puff({x:end.x,y:end.y-6}, 'Cleared!');
       }, ms);
     }
+  }
+
+
+  function driveMotion(vehicle,pile,start,end,bank,ms) {
+    vehicle.classList.toggle('yard-left',start.x > end.x);
+    travel(vehicle,[start,end],ms);
+    travel(pile,[end,{...end,offset:.68},{...bank,size:.7,height:.55}],ms);
+  }
+  function completeDrive(index,start,end,bank) {
+    plowVisited = true;
+    plow.cleared.push(index);
+    plow.trails.push({index,start,end,bank});
+    plow.at = end;
   }
 
   function readyFight() {
@@ -238,9 +271,7 @@
     function toss(start,end,ms,hostile=false) {
       const ball = element('div', 'yard-shot' + (hostile ? ' yard-incoming' : ''));
       ball.append(sprite('yard-ball')); effects.append(place(ball, start));
-      const coords = (x,y) => ({ left:x+'%',top:y+'%' });
-      animate(ball,[coords(start.x,start.y),{...coords((start.x+end.x)/2,Math.min(start.y,end.y)-5),offset:.5},coords(end.x,end.y)],ms);
-      if (reduced()) place(ball,end);
+      travel(ball,[start,{x:(start.x+end.x)/2,y:Math.min(start.y,end.y)-6,offset:.5},end],ms,'-50%');
       later(() => ball.remove(),ms);
     }
     function finish() {
@@ -260,7 +291,7 @@
           duel.me++; updateScore(); puff(end,'Hit!');
           if (duel.me >= 3) return finish();
           duel.target = (duel.target + 1) % positions.length;
-          place(target,positions[duel.target]);
+          move(target,positions[duel.target],320);
         } else puff(end,'Miss');
       },330);
       later(()=>{ if(alive()) { duel.locked=false; throwButton.disabled=false; } },1150);
@@ -269,7 +300,7 @@
     function dodge(direction) {
       if (!alive()) return;
       duel.lane = Math.max(0,Math.min(lanes.length-1,duel.lane+direction));
-      place(glove,{x:lanes[duel.lane],y:97});
+      move(glove,{x:lanes[duel.lane],y:97},155);
     }
     function enemyThrow() {
       if (!alive()) return;
@@ -302,7 +333,7 @@
   function key(event) {
     if (!active || mode !== 'fight' || !duel?.running || event.altKey || event.ctrlKey || event.metaKey || event.defaultPrevented) return;
     const launcher = document.getElementById('launcher-backdrop');
-    if (launcher && !launcher.hidden) return;
+    if (launcher && !launcher.hidden || event.target.closest?.('input,textarea,[role=dialog]')) return;
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault(); if (!event.repeat) duel.dodge(event.key === 'ArrowLeft' ? -1 : 1);
     } else if (event.code === 'Space' && !event.target.closest?.('button, input, textarea, select, a')) {
@@ -328,9 +359,106 @@
     desktopSnowman.title = label;
     desktopSnowman.setAttribute('aria-label',label);
   }
+  function drawAmbient() {
+    ambientLayer.replaceChildren();
+    const isPlowing = ambientOperation?.kind === 'plow';
+    parked.hidden = active || isPlowing || !plowVisited;
+    place(parked,plow.at);
+    const lastTrail = plow.trails[plow.trails.length-1];
+    parked.classList.toggle('yard-left',!!lastTrail && lastTrail.start.x > lastTrail.end.x);
+    showDesktopSnowman();
+    if (active || !plow.trails.length) return;
+    tracks(ambientLayer);
+    plow.trails.forEach(trail => prop('yard-pile',trail.bank,'yard-bank',null,null,ambientLayer));
+  }
+
+  function refresh() {
+    if (!shell || ambientOperation) return;
+    const previous = snowmanLevel;
+    snowmanLevel = loadLevel();
+    if (active && mode === 'build' && !pendingAction && previous !== snowmanLevel) build();
+    if (!active) drawAmbient();
+  }
+  function finishAmbientNow() {
+    // If a visitor opens the yard during a wallpaper animation, retain every accepted action.
+    while (ambientOperation || ambientQueue.length) {
+      if (!ambientOperation) { beginAmbient(); continue; }
+      window.clearTimeout(ambientOperation.timer);
+      ambientOperation.commit();
+      ambientOperation = null;
+    }
+    shell.dataset.ambientRunning = '';
+    drawAmbient();
+  }
+  function returnToss() {
+    const start = {x:buildSite.x-1, y:buildSite.y-3};
+    const landing = {x:buildSite.x-12, y:94};
+    const ball = element('div','yard-shot yard-return');
+    ball.append(sprite('yard-ball'));
+    const powder = element('div','yard-powder');
+    ambientLayer.append(place(ball,start),place(powder,landing));
+    if (reduced() || !ball.animate) {
+      ball.hidden = true;
+      powder.style.opacity = '.85';
+      return 440;
+    }
+    const flight = 830, duration = flight+380;
+    travel(ball,[{...start,size:.3}, {x:start.x-4,y:start.y-7,size:.66,offset:.45}, {...landing,size:1.12}],flight,'-50%');
+    const impact = flight/duration;
+    ball.animate([{opacity:1}, {opacity:1,offset:impact-.015}, {opacity:0,offset:impact}, {opacity:0}],
+      {duration,fill:'forwards'});
+    powder.animate([{opacity:0,transform:'translate(-50%,-50%) scale(.3)'}, {opacity:0,offset:impact-.01},
+      {opacity:.86,transform:'translate(-50%,-50%) scale(.85)',offset:impact+.05},
+      {opacity:0,transform:'translate(-50%,-65%) scale(1.5)'}], {duration,fill:'forwards'});
+    return duration;
+  }
+  function beginAmbient() {
+    if (!ambientQueue.length || active || ambientOperation) return;
+    const kind = ambientQueue.shift();
+    snowmanLevel = loadLevel();
+    if (kind === 'plow' && plow.cleared.length === pileSpots.length) plow = {at:parking,cleared:[],trails:[]};
+    const op = {kind,timer:0,commit:null};
+    ambientOperation = op;
+    shell.dataset.ambientRunning = kind;
+    drawAmbient();
+    let duration;
+    if (kind === 'roll' && snowmanLevel === 3) {
+      duration = returnToss();
+      op.commit = () => {};
+    } else if (kind === 'roll') {
+      const level = snowmanLevel, start = {x:47+level*2,y:91};
+      const ball = prop('yard-ball',start,'yard-build-ball',null,null,ambientLayer);
+      duration = reduced() ? 140 : 1500;
+      rollMotion(ball,start,level,duration);
+      op.commit = () => { snowmanLevel = Math.max(loadLevel(),level+1); saveLevel(); };
+    } else {
+      const index = pileSpots.findIndex((_,i) => !plow.cleared.includes(i));
+      const start = plow.at, end = pileSpots[index];
+      const bank = {x:end.x+(Math.sign(end.x-start.x)||1)*5,y:end.y-.8};
+      const vehicle = prop('plow',start,'yard-plow',null,null,ambientLayer);
+      const pile = prop('yard-pile',end,'yard-pile',null,null,ambientLayer);
+      duration = reduced() ? 150 : 760+Math.abs(end.x-start.x)*27;
+      driveMotion(vehicle,pile,start,end,bank,duration);
+      op.commit = () => completeDrive(index,start,end,bank);
+    }
+    op.timer = window.setTimeout(() => {
+      op.commit(); ambientOperation=null; shell.dataset.ambientRunning='';
+      refresh(); beginAmbient();
+    },duration);
+  }
+  function ambient(kind) {
+    if (!shell || active || !['roll','plow'].includes(kind) || ambientQueue.length >= 6) return false;
+    ambientQueue.push(kind); beginAmbient();
+    return true;
+  }
+  function syncStage(event) {
+    if (event.key === storageKey || event.key === null) refresh();
+  }
   function enter(next = 'build') {
     if (!shell || active) return;
+    finishAmbientNow();
     active = true;
+    ambientLayer.hidden = true;
     shell.classList.add('yard-open');
     field.hidden = false; shell.querySelector('.yard-panel').hidden=false;
     shell.querySelector('.yard-parked').hidden=true;
@@ -343,14 +471,17 @@
     active=false; duel=null; resetScene();
     shell.classList.remove('yard-open');
     field.hidden = true; shell.querySelector('.yard-panel').hidden=true;
-    shell.querySelector('.yard-parked').hidden=false;
-    showDesktopSnowman();
+    ambientLayer.hidden=false;
+    refresh();
   }
   function init(stageElement, onEnterRequest) {
-    if (shell) { exit(); shell.remove(); }
+    if (shell) { if (!active) finishAmbientNow(); exit(); shell.remove(); }
     host = stageElement; onEnter = onEnterRequest;
     shell = element('div','snow-yard');
-    const parked = action('',() => requestActivity('plow'),'yard-parked');
+    parked = action('',() => requestActivity('plow'),'yard-parked');
+    ambientLayer = element('div','yard-ambient');
+    ambientLayer.setAttribute('aria-hidden','true');
+    shell.dataset.ambientRunning='';
     snowmanLevel = loadLevel();
     desktopSnowman = action('', () => requestActivity(snowmanLevel === 3 ? 'fight' : 'build'), 'yard-prop yard-snowman yard-desktop-snowman');
     place(desktopSnowman,buildSite);
@@ -368,11 +499,13 @@
     });
     message=element('p','yard-message'); message.setAttribute('role','status');
     control=element('div','yard-controls'); panel.append(title,nav,message,control);
-    shell.append(parked,desktopSnowman,field,panel); host.append(shell);
+    shell.append(ambientLayer,parked,desktopSnowman,field,panel); host.append(shell);
+    drawAmbient();
+    window.removeEventListener('storage',syncStage); window.addEventListener('storage',syncStage);
     window.removeEventListener('keydown',key); window.addEventListener('keydown',key);
     mediaQuery=window.matchMedia?.('(prefers-reduced-motion: reduce)');
     window.removeEventListener('snow-settings',applyMotion); window.addEventListener('snow-settings',applyMotion);
     applyMotion();
   }
-  window.SnowYard=Object.freeze({init,enter,exit});
+  window.SnowYard=Object.freeze({init,enter,exit,ambient,refresh});
 })();

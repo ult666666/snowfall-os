@@ -1,318 +1,257 @@
-/* The desktop arranges app windows. Each mini-app owns its own data and behavior. */
+/* The Mac presents this same scene as a click-through wallpaper or an interactive window. */
 (() => {
   'use strict';
   const $ = selector => document.querySelector(selector);
-  const scene = $('#desktop');
-  const apps = {
-    radio: { title: 'Cabin Radio', icon: 'radio' },
-    notes: { title: 'Field notes', icon: 'notes' },
-    focus: { title: 'Focus timer', icon: 'focus' },
-    yard: { title: 'Snow yard', icon: 'snowman' },
-    guide: { title: 'Field guide', icon: 'guide' },
-    settings: { title: 'Settings', icon: 'settings' }
-  };
+  const scene = $('#scene');
+  const panel = $('#tools-panel');
+  const bridge = window.webkit?.messageHandlers?.snowfallWindow;
+  const isMacApp = Boolean(window.snowfallNative && bridge);
+  let surface = isMacApp ? window.snowfallSurface || 'wallpaper' : 'preview';
+  let activeTool = null;
+  let cleanupTool = null;
+  let inYard = false;
+  let idleTimer;
+
   const paths = {
-    snow: '<path d="M12 2v20M3.35 7l17.3 10M3.35 17l17.3-10M9 4.5l3 2.7 3-2.7M9 19.5l3-2.7 3 2.7M4.1 10.8l3.8-1.3-.7-3.8m9.6 12.6-.7-3.8 3.8-1.3M7.2 18.3l.7-3.8-3.8-1.3m15.8-2.4-3.8-1.3.7-3.8"/>',
-    expand: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>',
-    close: '<path d="m6 6 12 12M18 6 6 18"/>', minus: '<path d="M5 16h14"/>',
-    eye: '<path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="2.6"/>',
-    search: '<circle cx="10.4" cy="10.4" r="6.9"/><path d="m16 16 5 5"/>'
+    snow: '<path d="M12 2v20M3.34 7l17.32 10M3.34 17 20.66 7M9 4l3 3 3-3m-6 16 3-3 3 3M3.8 10.5 8 9.7l-1-4m10 12.6-1-4 4.2-.8M7 18.3l1-4-4.2-.8m16.4-3L16 9.7l1-4"/>',
+    sliders: '<path d="M3 6h3m6 0h9M3 17h11m6 0h1"/><circle cx="9" cy="6" r="3"/><circle cx="17" cy="17" r="3"/>',
+    expand: '<path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/>',
+    close: '<path d="m6 6 12 12m0-12L6 18"/>', check: '<path d="m4.5 12.5 4.5 4.3L19.5 6.5"/>',
+    back: '<path d="m14.5 5-7 7 7 7"/>', forward: '<path d="m9 5 7 7-7 7"/>',
+    radio: '<rect x="3" y="8" width="18" height="13" rx="3"/><path d="m5 8 13-5M6 12h6m-6 4h3"/><circle cx="16" cy="15" r="2.3"/>',
+    notes: '<path d="M6 3h10l3 3v14H6zM9 10h7m-7 3h7m-7 3h4"/>',
+    focus: '<circle cx="12" cy="14" r="7.5"/><path d="M10 2h4m-2 1v3m0 4v4l2.8 1.8m3.7-8.3 1.5-1.5"/>',
+    guide: '<path d="M12 6c-3-2-6-2-10-1v14c4-1 7-1 10 1 3-2 6-2 10-1V5c-4-1-7-1-10 1Zm0 0v14"/>',
+    settings: '<path d="M3 16h11a3.4 3.4 0 0 0 .6-6.7 5.1 5.1 0 0 0-9.6 1.4 2.7 2.7 0 0 0-2 5.3ZM7 19h.01M11 21h.01M15 19h.01M19 5l1-1m-3-2v2"/>',
+    external: '<path d="M13 4h7v7m-9 2 9-9M9 5H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>',
+    music: '<path d="M9 17V6l10-2v11M9 9l10-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="16" cy="16" rx="3" ry="2"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/>'
   };
-  function glyph(name) {
-    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths[name] + '</svg>';
+  function icon(name, className = '') {
+    const span = document.createElement('span');
+    span.dataset.icon = name;
+    span.className = className;
+    span.setAttribute('aria-hidden','true');
+    span.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">'+paths[name]+'</svg>';
+    return span;
   }
-  function addGlyphs(parent) {
-    parent.querySelectorAll('[data-glyph]').forEach(node => { node.innerHTML = glyph(node.dataset.glyph); });
-  }
-  function sprite(name) {
-    const img = new Image();
-    img.src = 'assets/icons/' + name + '.png';
-    img.alt = '';
-    img.draggable = false;
-    return img;
-  }
-  function appButton(kind, className, showLabel) {
-    const def = apps[kind];
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = className;
-    button.dataset.open = kind;
-    button.dataset.label = def.title;
-    button.setAttribute('aria-label', def.title);
-    button.append(sprite(def.icon));
-    if (showLabel) {
-      const span = document.createElement('span');
-      span.textContent = def.title;
-      button.append(span);
-    }
-    return button;
-  }
-  for (const kind of ['notes', 'focus', 'yard']) $('#shortcuts').append(appButton(kind, 'shortcut', true));
-  for (const kind of Object.keys(apps)) {
-    if (kind === 'guide') {
-      const rule = document.createElement('span');
-      rule.className = 'dock-divider';
-      $('#dock').append(rule);
-    }
-    $('#dock').append(appButton(kind, 'dock-item', false));
-  }
-  addGlyphs(document);
+  for (const slot of document.querySelectorAll('[data-icon]')) slot.replaceWith(icon(slot.dataset.icon));
+  const tools = {
+    radio:'Cabin Radio', notes:'Notebook', focus:'Focus timer', guide:'AI field guide', settings:'Snowfall settings'
+  };
 
-  const dateFormat = new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' });
-  function clockTick() {
-    const now = new Date();
-    $('#clock').textContent = (now.getHours() % 12 || 12) + ':' + String(now.getMinutes()).padStart(2, '0');
-    $('#clock').dateTime = now.toISOString();
-    $('#meridiem').textContent = now.getHours() >= 12 ? 'PM' : 'AM';
-    $('#calendar').textContent = dateFormat.format(now);
-    setTimeout(clockTick, 60000 - (now.getTime() % 60000) + 40);
-  }
-  clockTick();
-
-  function weather({snow, motion}) {
-    scene.classList.toggle('reduce-motion', !motion);
-    scene.classList.toggle('motion-enabled', motion);
-    $('#weather-text').textContent = { off: 'Clear sky', light: 'Light snow', heavy: 'Heavy snow' }[snow];
-    const flakes = document.createDocumentFragment();
-    const count = motion ? {off:0, light:32, heavy:85}[snow] : 0;
-    for (let index = 0; index < count; index++) {
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  function weather() {
+    const {snow, motion} = SnowApps.settings();
+    const animated = motion && !reduceMotion.matches;
+    scene.classList.toggle('reduce-motion',!animated);
+    if (isMacApp) bridge.postMessage(animated && snow !== 'off' ? 'effectsOn' : 'effectsOff');
+    const count = animated ? {light:30,heavy:82,off:0}[snow] : 0;
+    const fragment = document.createDocumentFragment();
+    const random = Math.random;
+    for (let i = 0; i < count; i++) {
       const flake = document.createElement('i');
-      flake.className = 'flake';
-      const rand = Math.random;
-      const values = { x: rand()*100+'%', s: 1+Math.floor(rand()*3)+'px', o: (.22+rand()*.5).toFixed(2),
-        t: 10+rand()*10+'s', d: -rand()*22+'s', drift: 12+rand()*45+'px' };
-      for (const [key,value] of Object.entries(values)) flake.style.setProperty('--'+key, value);
-      flakes.append(flake);
+      const depth = random(), duration = 17 - depth*8 + random()*7;
+      const values = { x: (random()*110-6)+'%', size: (1.5+depth*3.2)+'px', alpha: (.25+depth*.46).toFixed(2),
+        duration: duration+'s', delay: -random()*duration+'s', mid: (8+random()*20)+'px', end: (19+random()*30)+'px' };
+      for (const [key,value] of Object.entries(values)) flake.style.setProperty('--'+key,value);
+      fragment.append(flake);
     }
-    $('#flakes').replaceChildren(flakes);
+    $('#snow').replaceChildren(fragment);
   }
-  weather(window.SnowApps.settings());
-  window.addEventListener('snow-settings', event => weather(event.detail));
+  weather();
+  window.addEventListener('snow-settings',weather);
+  reduceMotion.addEventListener('change',weather);
 
-  const windows = new Map();
-  let front = 1;
-  const topMargin = () => $('.menubar').offsetHeight + 8;
-  function bound(value, low, high) { return Math.max(low, Math.min(high, value)); }
-  function place(panel, x, y) {
-    panel.style.left = bound(x, 7, scene.clientWidth - panel.offsetWidth - 7) + 'px';
-    panel.style.top = bound(y, topMargin(), scene.clientHeight - panel.offsetHeight - 7) + 'px';
+  function wake() {
+    clearTimeout(idleTimer);
+    scene.classList.remove('quiet');
+    if (surface === 'wallpaper' || !panel.hidden || inYard) return;
+    idleTimer = setTimeout(() => {
+      const controls = $('#surface-controls');
+      if (!controls.contains(document.activeElement) && !controls.matches(':hover')) scene.classList.add('quiet');
+    },5500);
   }
-  function defaultPlace(panel, kind) {
-    const w = scene.clientWidth, h = scene.clientHeight;
-    const left = w <= 500 ? 15 : Math.max(25, w * .0455);
-    const radioTop = Math.max(topMargin()+90, h * (w <= 500 ? .388 : .36));
-    if (kind === 'radio') { place(panel, left, radioTop); return; }
-    const offset = (windows.size-1) % 4 * 18;
-    place(panel, w < 650 ? 15 : Math.max(left + 35, w * .49 - panel.offsetWidth/2 + offset),
-      w < 650 ? topMargin() + 52 : Math.max(topMargin()+30, h * .23 + offset));
+  scene.addEventListener('pointermove',wake,{passive:true});
+  scene.addEventListener('pointerdown',wake,{passive:true});
+  scene.addEventListener('focusin',wake);
+  scene.addEventListener('pointerleave',wake);
+
+  function cleanup() {
+    if (cleanupTool) cleanupTool();
+    cleanupTool = null;
+    activeTool = null;
+    $('#panel-body').replaceChildren();
   }
-  function raise(panel) {
-    panel.style.zIndex = String(++front);
+  function closeTools(restoreFocus = false) {
+    cleanup();
+    panel.hidden = true;
+    $('#tools').setAttribute('aria-expanded','false');
+    if (restoreFocus) $('#tools').focus({preventScroll:true});
+    wake();
   }
-  function attachDrag(panel, head) {
-    let drag = null;
-    head.addEventListener('pointerdown', event => {
-      if (event.button !== 0 || event.target.closest('button')) return;
-      drag = { x: event.clientX-panel.offsetLeft, y: event.clientY-panel.offsetTop, id:event.pointerId };
-      head.setPointerCapture(event.pointerId);
-      event.preventDefault();
-    });
-    head.addEventListener('pointermove', event => {
-      if (drag?.id === event.pointerId) {
-        panel.dataset.dragged = 'true';
-        place(panel, event.clientX-drag.x, event.clientY-drag.y);
-      }
-    });
-    const finish = () => { drag = null; };
-    head.addEventListener('pointerup', finish);
-    head.addEventListener('lostpointercapture', finish);
-    head.addEventListener('pointercancel', finish);
-  }
-  function showWindow(kind, focusTitle = true) {
-    const entry = windows.get(kind);
-    if (entry) {
-      entry.panel.hidden = false;
-      place(entry.panel, parseFloat(entry.panel.style.left), parseFloat(entry.panel.style.top));
-      raise(entry.panel);
-      if (focusTitle) entry.panel.focus({preventScroll:true});
+  function showTools(kind = null) {
+    if (surface === 'wallpaper') {
+      if (isMacApp) bridge.postMessage('tools');
       return;
     }
-    const panel = document.createElement('section');
-    const def = apps[kind];
-    panel.className = 'app-window';
-    panel.dataset.kind = kind;
-    panel.tabIndex = -1;
-    panel.setAttribute('aria-label', def.title);
-    panel.innerHTML = '<div class="window-head"><h2></h2><div class="window-buttons">' +
-      '<button class="frame-btn minimize" type="button"><span data-glyph="minus"></span></button>' +
-      '<button class="frame-btn close" type="button"><span data-glyph="close"></span></button></div></div><div class="window-body"></div>';
-    const head = panel.querySelector('.window-head');
-    head.prepend(sprite(def.icon));
-    head.querySelector('h2').textContent = def.title;
-    const dockButton = $('#dock [data-open="'+kind+'"]');
-    const min = panel.querySelector('.minimize'), close = panel.querySelector('.close');
-    min.title = 'Minimize '+def.title;
-    close.title = 'Close '+def.title;
-    min.setAttribute('aria-label',min.title);
-    close.setAttribute('aria-label',close.title);
-    addGlyphs(panel);
-    $('#windows').append(panel);
-    const body = panel.querySelector('.window-body');
-    const cleanup = kind === 'radio' ? window.CabinRadio.mount(body) : window.SnowApps.open(kind, body);
-    windows.set(kind, {panel, cleanup});
-    dockButton.classList.add('is-open');
-    panel.addEventListener('pointerdown', () => raise(panel));
-    panel.addEventListener('focusin', () => raise(panel));
-    min.addEventListener('click', () => { panel.hidden = true; dockButton.focus({preventScroll:true}); });
-    close.addEventListener('click', () => {
-      if (cleanup) cleanup();
-      panel.remove();
-      windows.delete(kind);
-      dockButton.classList.remove('is-open');
-      dockButton.focus({preventScroll:true});
-    });
-    attachDrag(panel, head);
-    defaultPlace(panel,kind);
-    raise(panel);
-    if (focusTitle) panel.focus({preventScroll:true});
-  }
-
-  let lastLauncherFocus;
-  function showResults() {
-    const query = $('#app-search').value.trim().toLowerCase();
-    const results = $('#results');
-    results.replaceChildren();
-    for (const [kind,def] of Object.entries(apps)) {
-      if (def.title.toLowerCase().includes(query)) results.append(appButton(kind,'result',true));
-    }
-    if (!results.childElementCount) {
-      const hint = document.createElement('p');
-      hint.className = 'empty-results';
-      hint.textContent = 'No matching apps.';
-      results.append(hint);
-    }
-  }
-  function closeLauncher() {
-    const dialog = $('#launcher-backdrop');
-    if (dialog.hidden) return;
-    dialog.hidden = true;
-    if (lastLauncherFocus?.isConnected) lastLauncherFocus.focus({preventScroll:true});
-  }
-  function openLauncher() {
-    const dialog = $('#launcher-backdrop');
-    if (!dialog.hidden) { closeLauncher(); return; }
-    lastLauncherFocus = document.activeElement;
-    dialog.hidden = false;
-    $('#app-search').value = '';
-    showResults();
-    $('#app-search').focus();
-  }
-  function setZen(on) {
-    scene.classList.toggle('zen-mode',on);
-    $('#scene-label').textContent = on ? 'Show desktop' : 'Hide desktop';
-    $('#scene-hint').setAttribute('aria-label', on ? 'Show desktop' : 'Hide desktop');
-    $('#scene-hint').title = $('#scene-label').textContent;
-  }
-  function setYard(on, activity = 'build') {
-    if (scene.classList.contains('yard-mode') === on) return;
-    scene.classList.toggle('yard-mode', on);
-    $('#back-to-desk').hidden = !on;
-    if (on) { setZen(false); window.SnowYard.enter(activity); $('#back-to-desk').focus({preventScroll:true}); }
-    else { window.SnowYard.exit(); $('#dock [data-open="yard"]').focus({preventScroll:true}); }
-  }
-  function openApp(kind, focusTitle = true, activity = 'build') {
-    if (!apps[kind]) return;
-    closeLauncher();
-    setZen(false);
-    if (kind === 'yard') { setYard(true,activity); return; }
-    setYard(false);
-    showWindow(kind,focusTitle);
-  }
-  window.SnowYard.init($('#yard-stage'),activity => openApp('yard',true,activity));
-  $('#back-to-desk').addEventListener('click',() => setYard(false));
-  document.addEventListener('click',event => {
-    const launch = event.target.closest('[data-open]');
-    if (launch) openApp(launch.dataset.open);
-  });
-  $('#app-search').addEventListener('input',showResults);
-  $('#desktop-menu').addEventListener('click',openLauncher);
-  $('#launch-hint').addEventListener('click',openLauncher);
-  $('#close-launcher').addEventListener('click',closeLauncher);
-  $('#launcher-backdrop').addEventListener('click',e => { if(e.target === e.currentTarget) closeLauncher(); });
-  $('#scene-hint').addEventListener('click',() => setZen(!scene.classList.contains('zen-mode')));
-  window.addEventListener('keydown',event => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-      event.preventDefault(); openLauncher(); return;
-    }
-    if (!$('#launcher-backdrop').hidden) {
-      if (event.key === 'Escape') { event.preventDefault(); closeLauncher(); return; }
-      const input = $('#app-search'), buttons = [...$('#results').querySelectorAll('button')];
-      if (event.key === 'Enter' && document.activeElement === input && buttons.length) {
-        event.preventDefault(); buttons[0].click(); return;
+    if (inYard) leaveYard();
+    const wasClosed = panel.hidden;
+    cleanup();
+    panel.hidden = false;
+    panel.classList.toggle('opening',wasClosed);
+    $('#tools').setAttribute('aria-expanded','true');
+    $('#panel-back').hidden = !kind;
+    $('#panel-title').textContent = kind ? tools[kind] : 'Cabin tools';
+    const body = $('#panel-body');
+    if (kind) {
+      activeTool = kind;
+      cleanupTool = kind === 'radio' ? CabinRadio.mount(body) : SnowApps.open(kind,body);
+      $('#panel-back').focus({preventScroll:true});
+    } else {
+      const list = document.createElement('div');
+      list.className = 'tool-list';
+      for (const [value,label] of Object.entries(tools)) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'tool-row';
+        button.dataset.open = value;
+        button.append(icon(value,'tool-icon'),document.createTextNode(label),icon('forward'));
+        button.addEventListener('click',() => showTools(value));
+        list.append(button);
       }
-      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && buttons.length) {
-        event.preventDefault();
-        const at = buttons.indexOf(document.activeElement), diff = event.key === 'ArrowDown' ? 1 : -1;
-        buttons[at < 0 ? (diff > 0 ? 0 : buttons.length-1) : (at+diff+buttons.length)%buttons.length].focus();
-      }
-      if (event.key === 'Tab') {
-        const items = [$('#close-launcher'),input,...buttons];
-        if ((!event.shiftKey && document.activeElement === items[items.length-1]) ||
-            (event.shiftKey && document.activeElement === items[0])) {
-          event.preventDefault(); items[event.shiftKey ? items.length-1 : 0].focus();
+      body.append(list);
+      if (isMacApp) {
+        const rule = document.createElement('hr');
+        rule.className = 'list-divider';
+        const subtitle = document.createElement('div');
+        subtitle.className = 'mac-label';
+        subtitle.textContent = 'Open on this Mac';
+        const group = document.createElement('div');
+        group.className = 'mac-shortcuts';
+        for (const [module,label] of Object.entries({notes:'Notes',music:'Music',clock:'Clock'})) {
+          const button = document.createElement('button');
+          button.className = 'tool-row';
+          button.type = 'button';
+          button.append(icon(module),document.createTextNode(label));
+          button.addEventListener('click',() => bridge.postMessage(module));
+          group.append(button);
         }
+        body.append(rule,subtitle,group);
       }
+      list.querySelector('button').focus({preventScroll:true});
+    }
+    wake();
+  }
+  function leaveYard() {
+    if (!inYard) return;
+    SnowYard.exit();
+    inYard = false;
+    scene.classList.remove('yard-active');
+    $('#back-to-desk').hidden = true;
+    wake();
+  }
+  function openYard(activity = 'build') {
+    if (surface === 'wallpaper') {
+      if (isMacApp) bridge.postMessage('play');
       return;
     }
-    if (event.key === 'Escape') {
-      if (scene.classList.contains('yard-mode')) setYard(false);
-      else if (scene.classList.contains('zen-mode')) setZen(false);
+    closeTools();
+    if (inYard) leaveYard();
+    inYard = true;
+    scene.classList.add('yard-active');
+    $('#back-to-desk').hidden = false;
+    SnowYard.enter(activity);
+    $('#back-to-desk').focus({preventScroll:true});
+  }
+  function finishYard() {
+    leaveYard();
+    if (isMacApp) bridge.postMessage('wallpaper');
+    else $('#play').focus({preventScroll:true});
+  }
+  function setSurface(next) {
+    surface = next === 'wallpaper' ? 'wallpaper' : 'preview';
+    document.documentElement.dataset.surface = surface;
+    closeTools();
+    leaveYard();
+    SnowYard.refresh?.();
+    wake();
+  }
+  function open(kind) {
+    if (kind === 'yard') openYard();
+    else if (kind === 'tools') showTools();
+    else if (Object.prototype.hasOwnProperty.call(tools,kind)) showTools(kind);
+  }
+  window.SnowYard.init($('#yard-stage'),openYard);
+  window.SnowScene = Object.freeze({open});
+  let imageRevision = 0;
+  const alpineDescription = $('#wallpaper').alt;
+  async function applyImage(custom) {
+    if (custom !== null && (typeof custom !== 'string' || !custom.startsWith('data:image/jpeg;base64,'))) return;
+    const revision = ++imageRevision;
+    const replacement = new Image();
+    replacement.src = custom || 'assets/scene.jpg';
+    try {
+      await replacement.decode();
+      if (revision !== imageRevision) return;
+      const wallpaper = $('#wallpaper');
+      wallpaper.src = replacement.src;
+      wallpaper.alt = custom ? 'Your chosen wallpaper image' : alpineDescription;
+      scene.classList.toggle('custom-image',Boolean(custom));
+    } catch { $('#status').textContent = 'This wallpaper image could not be opened.'; }
+  }
+  window.addEventListener('snowfall-image',event => {
+    if (isMacApp) window.snowfallImageReady = applyImage(event.detail);
+  });
+  window.addEventListener('snowfall-surface',e => setSurface(e.detail));
+  window.addEventListener('snowfall-open',e => open(e.detail));
+  window.addEventListener('snowfall-action',e => {
+    if (surface === 'wallpaper' && (e.detail === 'roll' || e.detail === 'plow')) SnowYard.ambient?.(e.detail);
+  });
+  window.addEventListener('focus',() => SnowYard.refresh?.());
+  document.addEventListener('visibilitychange',() => {
+    if (!document.hidden) SnowYard.refresh?.();
+  });
+  $('#tools').addEventListener('click',() => panel.hidden ? showTools() : closeTools(true));
+  $('#play').addEventListener('click',() => openYard());
+  $('#back-to-desk').addEventListener('click',finishYard);
+  $('#panel-close').addEventListener('click',() => closeTools(true));
+  $('#panel-back').addEventListener('click',() => showTools());
+  scene.addEventListener('pointerdown',e => {
+    if (!panel.hidden && !panel.contains(e.target) && !e.target.closest('#surface-controls')) closeTools();
+  });
+  window.addEventListener('keydown',e => {
+    if (surface === 'wallpaper') return;
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (panel.hidden) showTools(); else closeTools(true);
+    } else if (e.key === 'Escape') {
+      if (!panel.hidden) { e.preventDefault(); if (activeTool) showTools(); else closeTools(true); }
+      else if (inYard) { e.preventDefault(); finishYard(); }
+      else if (isMacApp) bridge.postMessage('wallpaper');
+      else wake();
     }
-  });
-  let resizeFrame;
-  window.addEventListener('resize',() => {
-    cancelAnimationFrame(resizeFrame);
-    resizeFrame = requestAnimationFrame(() => {
-      if (scene.clientWidth < 120 || scene.clientHeight < 120) return;
-      for (const [kind, {panel}] of windows) {
-        if (panel.hidden || !panel.offsetWidth) continue;
-        if (panel.dataset.dragged) place(panel, parseFloat(panel.style.left), parseFloat(panel.style.top));
-        else defaultPlace(panel, kind);
-      }
-    });
-  });
-
-  const phrases = ['Got a carrot?', 'Snow day!', 'Meet me in the yard!', 'Look at those stars.', 'Cocoa weather!', 'Hi, neighbor!'];
-  let phrase = 0, hopTimer;
-  $('#pip').addEventListener('click', () => {
-    const line = phrases[phrase++ % phrases.length];
-    $('#pip-bubble').textContent = line;
-    $('#announcer').textContent = 'Pip says '+line;
-    const pip = $('#pip');
-    clearTimeout(hopTimer);
-    pip.classList.remove('hopping');
-    void pip.offsetWidth;
-    pip.classList.add('hopping');
-    hopTimer = setTimeout(()=>pip.classList.remove('hopping'),560);
   });
   const fullButton = $('#fullscreen');
-  function fullLabel(active) {
-    fullButton.title = active ? 'Exit full screen' : 'Enter full screen';
+  function labelFull(on) {
+    fullButton.title = on ? 'Exit full screen' : 'Enter full screen';
     fullButton.setAttribute('aria-label',fullButton.title);
   }
-  fullButton.addEventListener('click', async () => {
-    const native = window.webkit?.messageHandlers?.snowfallWindow;
-    if (native) { native.postMessage('fullscreen'); return; }
+  if (!isMacApp && !scene.requestFullscreen && !scene.webkitRequestFullscreen) {
+    fullButton.previousElementSibling.hidden = true;
+    fullButton.hidden = true;
+  }
+  fullButton.addEventListener('click',async () => {
+    if (isMacApp) { bridge.postMessage('fullscreen'); return; }
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
       else if (document.webkitFullscreenElement) document.webkitExitFullscreen();
       else if (scene.requestFullscreen) await scene.requestFullscreen();
-      else if (scene.webkitRequestFullscreen) scene.webkitRequestFullscreen();
-      else setZen(!scene.classList.contains('zen-mode'));
-    } catch { setZen(true); }
+      else scene.webkitRequestFullscreen();
+    } catch { $('#status').textContent = 'Fullscreen is unavailable in this window.'; }
   });
-  document.addEventListener('fullscreenchange',()=>fullLabel(Boolean(document.fullscreenElement)));
-  document.addEventListener('webkitfullscreenchange',()=>fullLabel(Boolean(document.webkitFullscreenElement)));
-  window.addEventListener('snowfall-native-fullscreen',event=>fullLabel(event.detail));
-  openApp('radio',false);
+  document.addEventListener('fullscreenchange',() => labelFull(Boolean(document.fullscreenElement)));
+  document.addEventListener('webkitfullscreenchange',() => labelFull(Boolean(document.webkitFullscreenElement)));
+  window.addEventListener('snowfall-native-fullscreen',e => labelFull(e.detail));
+  setSurface(surface);
 })();

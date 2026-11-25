@@ -64,11 +64,11 @@
       const words = editor.value.trim().split(/\s+/u).filter(Boolean).length;
       count.textContent = `${words} ${words === 1 ? 'word' : 'words'}`;
     }
-    status.textContent = 'Private to this browser';
+    status.textContent = 'Stored on this device';
     update();
     editor.addEventListener('input', () => {
       const storageWorks = save('notes', editor.value);
-      status.textContent = storageWorks ? 'Saved in this browser' : 'Kept until you close this page';
+      status.textContent = storageWorks ? 'Saved on this device' : 'Kept for this session';
       update();
     });
     function sync(event) {
@@ -76,7 +76,7 @@
       const next = load('notes', '');
       if (typeof next === 'string' && editor.value !== next) {
         editor.value = next;
-        status.textContent = 'Updated from another tab';
+        status.textContent = 'Updated on this device';
         update();
       }
     }
@@ -228,7 +228,7 @@
     root.innerHTML = `<fieldset class="sa-field"><legend>Snowfall</legend><div class="sa-segment" role="group" aria-label="Snow intensity">
       <button type="button" data-snow="off">Off</button><button type="button" data-snow="light">Light</button><button type="button" data-snow="heavy">Heavy</button>
       </div></fieldset><label class="sa-switch-row"><span><strong>Reduce motion</strong><small>Keep the desktop animations still.</small></span><input type="checkbox" role="switch"></label>
-      <p class="sa-meta sa-preference-note" role="status">Preferences apply to this browser.</p>`;
+      <p class="sa-meta sa-preference-note" role="status">Preferences are saved locally.</p>`;
     const buttons = root.querySelectorAll('[data-snow]');
     const reduce = root.querySelector('input');
     const status = root.querySelector('[role="status"]');
@@ -239,7 +239,7 @@
     }
     function change(partial) {
       const stored = save('settings', { ...settings(), ...partial });
-      status.textContent = stored ? 'Saved in this browser.' : 'Applied for this visit.';
+      status.textContent = stored ? 'Saved on this device.' : 'Applied for this session.';
       broadcastSettings();
     }
     buttons.forEach(el => el.addEventListener('click', () => change({ snow: el.dataset.snow })));

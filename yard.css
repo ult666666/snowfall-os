@@ -1,74 +1,88 @@
-/* Scene objects share the desktop's pixel art, but only their hit areas catch input. */
-.snow-yard, .yard-field, .yard-props, .yard-effects, .yard-tracks { position: absolute; inset: 0; width: 100%; height: 100%; }
-.snow-yard { pointer-events: none; --yard-glow: #ffd9ac; --yard-border: #b69cbe; --yard-dark: #35293e; }
+.snow-yard, .yard-field, .yard-props, .yard-effects, .yard-ambient, .yard-tracks {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+}
+.snow-yard { pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; }
 .snow-yard [hidden] { display: none !important; }
 .yard-field { pointer-events: auto; overflow: hidden; }
 .yard-field:focus-visible { outline-offset: -3px; }
-.yard-props, .yard-effects, .yard-tracks { pointer-events: none; }
-.yard-sprite { display: block; width: 100%; height: auto; image-rendering: pixelated; pointer-events: none; -webkit-user-select: none; user-select: none; }
-.yard-parked, .yard-prop { border: 0; position: absolute; padding: 0; background: transparent; touch-action: manipulation; }
+.yard-props, .yard-effects, .yard-tracks, .yard-ambient, .yard-ambient * { pointer-events: none; }
+.yard-sprite { position: relative; display: block; width: 100%; height: auto; image-rendering: auto; pointer-events: none; -webkit-user-select: none; user-select: none; }
+.yard-parked, .yard-prop {
+  position: absolute; padding: 0; border: 0; background: transparent; touch-action: manipulation;
+  transform: translate(-50%, -100%); transform-origin: bottom center;
+}
 .yard-parked, button.yard-prop { pointer-events: auto; cursor: pointer; }
-.yard-parked { left: 16%; bottom: 11%; width: clamp(56px, 5.5vw, 80px); filter: drop-shadow(1px 3px 0 #44364680); }
-.yard-parked:hover, .yard-parked:focus-visible { filter: drop-shadow(0 0 4px #ffe4b9); }
-.yard-parked::after {
-  position: absolute; content: 'Snow Yard'; left: 50%; bottom: 100%; margin-bottom: 2px; white-space: nowrap;
-  color: #50364a; background: #ffead2; padding: 4px 8px; border: 1px solid #744f64; border-radius: 5px;
-  font: 500 14px/1.2 'Pixelify Sans', monospace; transform: translateX(-50%); opacity: 0; pointer-events: none;
+.yard-prop::before, .yard-parked::before {
+  content: ''; position: absolute; pointer-events: none; left: 15%; bottom: 3%; width: 61%; height: 13%;
+  background: radial-gradient(ellipse at center, rgba(33,43,68,.50) 0%, rgba(44,53,77,.3) 30%, rgba(47,56,85,0) 74%);
+  transform: rotate(-5deg); filter: blur(1px);
 }
-.yard-parked:hover::after, .yard-parked:focus-visible::after { opacity: 1; }
-.yard-panel {
-  position: absolute; left: clamp(12px, 2.5vw, 40px); top: clamp(16px, 3vh, 40px); width: min(324px, calc(100% - 24px));
-  padding: 0 15px 14px; pointer-events: auto; background: #302638f5; border: 1px solid #d7bbd7; border-radius: 9px;
-  box-shadow: 0 0 0 2px #2b2036, 2px 5px 0 #221a3155; color: #faeaf3; font: 14px/1.4 'DM Sans', sans-serif;
-}
-.yard-panel-title { display: flex; gap: 8px; align-items: center; margin: 0 -15px 12px; padding: 4px 10px; background: linear-gradient(90deg,#e4c6d9,#bda5cd); color: #3e2c42; border-radius: 8px 8px 0 0; border-bottom: 2px solid #1e182b; }
-.yard-panel-title strong { font: 600 18px/1.1 'Pixelify Sans', monospace; }
-.yard-panel-title img { width: 25px; }
-.yard-tabs, .yard-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
-.yard-panel button { min-height: 32px; border: 1px solid #826e90; border-radius: 5px; padding: 5px 9px; background: #44374e; font: inherit; font-size: 13px; color: #f7edf8; cursor: pointer; }
-.yard-tabs { gap: 3px; padding: 3px; border-radius: 5px; background: #251e30; border: 1px solid #685773; }
-.yard-tabs button { flex: 1 0 auto; min-height: 28px; background: transparent; border-color: transparent; }
-.yard-tabs button[aria-pressed=true] { color: #fff6e9; background: #654f6a; border-color: #a78bab; }
-.yard-panel button:hover:enabled { border-color: #ead1e6; background-color: #5e4c65; }
-.yard-panel button.yard-accent { color: #452e3e; background: #ffd4af; border-color: #efbfa4; font-weight: 700; }
-.yard-panel button.yard-accent:hover:enabled { background: #ffe7c7; }
-.yard-panel button:disabled { opacity: .65; cursor: default; }
-.yard-panel .yard-message { margin: 12px 0; color: #fae9ec; }
-.yard-count, .yard-score { font-size: 12px; font-weight: 650; color: #e1cde6; margin-inline: 3px; }
-.yard-score { flex: 1 1 auto; white-space: nowrap; margin-left: 0; }
-.yard-prop { transform: translate(-50%,-100%); transform-origin: bottom center; filter: drop-shadow(1px 3px 0 #53486180); }
-button.yard-prop:hover:enabled .yard-sprite { filter: drop-shadow(0 0 3px #fff2da); }
-.yard-snowman { width: clamp(70px,7.5vw,112px); }
-.yard-distant { width: clamp(50px,5vw,74px); }
-.yard-build-ball { width: clamp(42px,4.7vw,68px); }
-.yard-plow { width: clamp(75px,8.5vw,130px); z-index: 2; }
+.yard-parked { width: clamp(49px, 4.5vw, 80px); }
+.yard-snowman { width: clamp(64px, 7.5vw, 122px); }
+.yard-snowman::before { left: 25%; width: 47%; bottom: 3%; height: 9%; }
+.yard-desktop-snowman, .yard-distant { width: clamp(44px, 4.6vw, 76px); }
+.yard-build-ball { width: clamp(29px, 3vw, 48px); }
+.yard-plow { width: clamp(76px, 8vw, 130px); z-index: 2; }
+.yard-ambient .yard-plow { width: clamp(49px, 4.5vw, 80px); }
 .yard-left img { transform: scaleX(-1); }
-.yard-pile { width: clamp(62px,7.8vw,110px); padding: 0 0 5px; }
-.yard-bank { width: clamp(43px,4.8vw,64px); transform: translate(-50%,-100%) scaleY(.75); }
-.yard-clearing { stroke: #c5c6f1; stroke-width: 1.4; opacity: .88; stroke-linecap: round; }
-.yard-tread { stroke: #686696; stroke-width: .25; stroke-dasharray: .6 .49; opacity: .8; }
-.yard-mitten { width: clamp(49px,5.5vw,80px); transition: left .18s ease-out; }
-.yard-rival { transition: left .32s ease, top .32s ease; }
+.yard-pile { width: clamp(65px, 7.8vw, 125px); }
+.yard-pile::before, .yard-bank::before { width: 77%; left: 10%; bottom: 4%; }
+.yard-bank { width: clamp(46px, 5.5vw, 88px); transform: translate(-50%, -100%) scaleY(.8); }
+.yard-ambient .yard-bank { opacity: .86; }
+.yard-clearing { stroke: #a4bccd; stroke-width: .75; opacity: .3; stroke-linecap: round; }
+.yard-tread { stroke: #536c80; stroke-width: .15; stroke-dasharray: .24 .17; opacity: .50; }
+.yard-mitten { width: clamp(45px, 4.3vw, 70px); }
+.yard-mitten::before, .yard-rival::before { filter: blur(2px); }
 .yard-aiming, .yard-aiming .yard-rival { cursor: crosshair; }
-.yard-shot { position: absolute; width: clamp(17px,2.3vw,34px); transform: translate(-50%,-50%); filter: drop-shadow(0 2px 0 #45354d85); }
-.yard-incoming { filter: drop-shadow(0 0 3px #ffc8a3); }
-.yard-puff, .yard-warning {
-  position: absolute; padding: 4px 9px; border-radius: 5px; border: 1px solid #735169; background: #fff2dc;
-  color: #54354a; font: 600 15px/1.1 'Pixelify Sans', monospace; transform: translate(-50%,-100%); white-space: nowrap;
+.yard-shot { position: absolute; width: clamp(16px, 1.9vw, 31px); transform: translate(-50%,-50%); }
+.yard-powder {
+  position: absolute; width: clamp(35px, 4vw, 65px); height: clamp(16px, 2vw, 31px); opacity: 0; transform: translate(-50%,-50%);
+  background: radial-gradient(ellipse at 50% 72%, #e5edf2c9 2%, #d1deea8a 26%, transparent 64%),
+    radial-gradient(ellipse at 28% 49%, #e5edf2aa, transparent 24%), radial-gradient(ellipse at 67% 43%, #dce5eeb0, transparent 30%),
+    radial-gradient(ellipse at 76% 55%, #c7d8e899, transparent 19%);
+  filter: blur(1px);
 }
-.yard-puff { animation: yard-puff .9s ease-out forwards; }
-.yard-warning { background: #ffd6ad; color: #4d2f40; outline: 2px dashed #ffde9e; outline-offset: 4px; }
-@keyframes yard-puff { from { transform: translate(-50%,-80%); opacity: 1; } 70% { opacity: 1; } to { transform: translate(-50%,-160%); opacity: 0; } }
+.yard-panel {
+  position: absolute; left: clamp(14px, 3vw, 48px); top: clamp(18px, 4vh, 44px);
+  width: min(302px, calc(100% - 28px)); padding: 15px 17px; pointer-events: auto;
+  color: #fafbfd; border: 1px solid #f1f5ff38; border-radius: 17px; background: rgba(31,45,58,.60);
+  -webkit-backdrop-filter: blur(24px) saturate(110%); backdrop-filter: blur(24px) saturate(110%);
+  box-shadow: 0 6px 28px #07121c29; font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+}
+.yard-panel-title { display: flex; align-items: center; gap: 7px; padding: 0; margin: 0 0 11px; }
+.yard-panel-title strong { font-size: 17px; font-weight: 600; letter-spacing: -.025em; }
+.yard-panel-title img { display: none; }
+.yard-tabs, .yard-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.yard-panel button {
+  min-height: 34px; padding: 6px 11px; color: #fff; border: 1px solid transparent; background: #ffffff18;
+  border-radius: 10px; font: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+}
+.yard-tabs { gap: 2px; padding: 3px; background: #0d182a3d; border-radius: 12px; }
+.yard-tabs button { flex: 1; background: transparent; white-space: nowrap; min-height: 29px; padding: 4px 6px; border-radius: 9px; }
+.yard-tabs button[aria-pressed=true] { background: #ffffff27; }
+.yard-panel button:hover:enabled { background: #ffffff30; }
+.yard-panel button.yard-accent { color: #233746; background: #eff3f5; }
+.yard-panel button.yard-accent:hover:enabled { background: #fff; }
+.yard-panel button:disabled { opacity: .55; cursor: default; }
+.yard-panel .yard-message { margin: 12px 0; }
+.yard-count, .yard-score { font-size: 12px; font-variant-numeric: tabular-nums; color: #eef2f5; padding: 0 3px; }
+.yard-score { flex: 1 1 auto; white-space: nowrap; padding-left: 0; }
+.yard-warning, .yard-puff {
+  position: absolute; padding: 4px 10px; white-space: nowrap; font: 500 12px/1.4 -apple-system,BlinkMacSystemFont,sans-serif;
+  transform: translate(-50%,-100%); border-radius: 15px; color: #fff; background: #223b4ccb; box-shadow: 0 2px 5px #17232e21;
+}
+.yard-puff { animation: yard-drift .9s ease-out forwards; }
+.yard-warning { background: #684128df; }
+@keyframes yard-drift { from { transform: translate(-50%,-65%); opacity: 1; } 70% { opacity: 1; } to { transform: translate(-50%,-155%); opacity: 0; } }
 .yard-still *, .yard-still *::before, .yard-still *::after { animation: none !important; transition: none !important; }
 @media (max-width: 600px) {
-  .yard-panel { top: 47px; left: 10px; width: min(307px, calc(100% - 20px)); }
-  .yard-parked { left: 9%; bottom: 14%; }
+  .yard-panel { top: 54px; left: 12px; }
   .yard-panel button { min-height: 36px; }
 }
 @media (max-height: 470px) {
-  .yard-panel { top: 7px; left: 8px; width: min(315px, calc(100% - 145px)); padding-bottom: 7px; }
-  .yard-panel-title { margin-bottom: 5px; }
+  .yard-panel { top: 9px; left: 10px; width: min(302px, calc(100% - 145px)); padding: 8px 12px; }
+  .yard-panel-title { margin-bottom: 4px; }
   .yard-panel .yard-message { margin: 5px 0; }
   .yard-snowman { width: 58px; }
-  .yard-mitten { width: 40px; }
+  .yard-mitten { width: 36px; }
 }

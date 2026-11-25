@@ -3,66 +3,45 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#22182f">
-  <meta name="description" content="A tiny winter desktop. Build a snowman, tune in to Cabin Radio, and send a little snowplow out into the clearing.">
-  <title>Snowfall OS · Frostpine Hollow</title>
-  <link rel="icon" href="assets/icons/cabin.png">
-  <link rel="preload" as="image" href="assets/winter.webp">
-  <link rel="preload" as="font" href="assets/fonts/pixelify-sans.ttf" type="font/ttf" crossorigin>
-  <link rel="stylesheet" href="desktop.css">
-  <link rel="stylesheet" href="apps.css">
-  <link rel="stylesheet" href="radio.css">
-  <link rel="stylesheet" href="yard.css">
-  <script defer src="apps.js"></script>
-  <script defer src="radio.js"></script>
-  <script defer src="yard.js"></script>
-  <script defer src="desktop.js"></script>
+  <meta name="theme-color" content="#324b65">
+  <meta name="description" content="An alpine winter wallpaper for Mac. Watch the snow fall, build a snowman, and send a little plow through fresh powder.">
+  <title>Snowfall · Frostpine Hollow</title>
+  <link rel="icon" href="assets/cabin-icon.png">
+  <link rel="preload" as="image" href="assets/scene.jpg">
+  <link rel="stylesheet" href="desktop.css?v=2">
+  <link rel="stylesheet" href="apps.css?v=2">
+  <link rel="stylesheet" href="radio.css?v=2">
+  <link rel="stylesheet" href="yard.css?v=2">
+  <script defer src="apps.js?v=2"></script>
+  <script defer src="radio.js?v=2"></script>
+  <script defer src="yard.js?v=2"></script>
+  <script defer src="desktop.js?v=2"></script>
 </head>
 <body>
-  <main id="desktop" aria-label="Snowfall OS desktop">
-    <img id="wallpaper" src="assets/winter.webp" alt="" draggable="false">
-    <div class="scene-shade" aria-hidden="true"></div>
-    <div id="flakes" aria-hidden="true"></div>
-    <header class="menubar">
-      <div class="brand"><img src="assets/icons/cabin.png" alt="">Snowfall OS</div>
-      <span class="bar-rule" aria-hidden="true"></span>
-      <nav aria-label="Desktop menu">
-        <button type="button" class="menu-link selected" id="desktop-menu" aria-haspopup="dialog">Desktop <span class="chevron"></span></button>
-        <button type="button" class="menu-link guide-link" data-open="guide">Field guide</button>
-      </nav>
-      <div class="bar-end">
-        <button type="button" class="weather" data-open="settings" aria-label="Change snowfall"><span data-glyph="snow"></span><span id="weather-text">Light snow</span></button>
-        <span class="bar-rule" aria-hidden="true"></span>
-        <button type="button" class="icon-button" id="fullscreen" aria-label="Enter full screen" title="Full screen"><span data-glyph="expand"></span></button>
-      </div>
-    </header>
-    <section id="clock-widget" aria-label="Local time and date">
-      <div class="place"><span class="pixel-star" aria-hidden="true">✦</span> Frostpine Hollow</div>
-      <div class="clockline"><time id="clock">--:--</time><span id="meridiem"></span></div>
-      <div id="calendar"></div>
-    </section>
-    <nav id="shortcuts" aria-label="Desktop shortcuts"></nav>
+  <main id="scene" aria-label="Frostpine Hollow winter landscape">
+    <img id="wallpaper" src="assets/scene.jpg" draggable="false" alt="Evening light on a snowy alpine valley. A timber cabin glows above a quiet lake.">
+    <div id="snow" aria-hidden="true"></div>
     <div id="yard-stage" aria-label="Snow yard"></div>
-    <button type="button" id="back-to-desk" class="floating-button" hidden>← Back to desktop</button>
-    <button type="button" id="pip" aria-label="Say hello to Pip the snow hare">
-      <span id="pip-bubble">Hi, neighbor!</span>
-      <img src="assets/icons/pip.png" alt="" draggable="false">
-      <span class="pip-tag">Pip</span>
-    </button>
-    <div id="windows"></div>
-    <footer id="desk-tools">
-      <button type="button" class="corner-tool launch-hint" id="launch-hint"><kbd>⌘ K</kbd> Quick launch</button>
-      <nav id="dock" aria-label="Application dock"></nav>
-      <button type="button" class="corner-tool scene-hint" id="scene-hint"><span data-glyph="eye"></span><span id="scene-label">Hide desktop</span></button>
-    </footer>
-    <div id="launcher-backdrop" hidden>
-      <section class="launcher" role="dialog" aria-modal="true" aria-labelledby="launcher-title">
-        <div class="launcher-heading"><h2 id="launcher-title">Quick launch</h2><button class="icon-button" id="close-launcher" aria-label="Close quick launch"><span data-glyph="close"></span></button></div>
-        <label class="searchbox"><span data-glyph="search"></span><input id="app-search" type="search" placeholder="Find an app…" aria-label="Find an app" autocomplete="off"></label>
-        <div id="results"></div>
-      </section>
+    <div id="surface-controls">
+      <div class="scene-caption">Frostpine Hollow</div>
+      <nav class="scene-controls glass" aria-label="Wallpaper controls">
+        <button id="play" type="button"><span data-icon="snow"></span>Play in snow</button>
+        <i aria-hidden="true"></i>
+        <button id="tools" type="button" aria-expanded="false" aria-controls="tools-panel"><span data-icon="sliders"></span>Tools</button>
+        <i aria-hidden="true"></i>
+        <button id="fullscreen" type="button" class="icon-control" aria-label="Enter full screen" title="Enter full screen"><span data-icon="expand"></span></button>
+      </nav>
     </div>
-    <div class="sr-only" id="announcer" role="status" aria-live="polite"></div>
+    <button id="back-to-desk" type="button" class="glass done" hidden><span data-icon="check"></span>Done</button>
+    <section id="tools-panel" class="glass" aria-labelledby="panel-title" hidden>
+      <header class="panel-head">
+        <button id="panel-back" type="button" class="icon-control" aria-label="Back to cabin tools" hidden><span data-icon="back"></span></button>
+        <h1 id="panel-title">Cabin tools</h1>
+        <button id="panel-close" type="button" class="icon-control" aria-label="Close cabin tools"><span data-icon="close"></span></button>
+      </header>
+      <div id="panel-body"></div>
+    </section>
+    <p class="sr-only" role="status" id="status"></p>
   </main>
 </body>
 </html>

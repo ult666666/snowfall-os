@@ -1,50 +1,47 @@
 # Snowfall OS
 
-A little winter desktop for your Mac. Settle into Frostpine Hollow, say hello to Pip the snow hare, and build a snowman who throws snowballs back.
+An animated winter wallpaper for your Mac. Snow falls around a warmly lit cabin while your Finder icons, widgets, and open apps stay clickable. The snowflake in the menu bar lets you roll a snowball or send the plow across your desktop.
 
 ## Open the cabin
 
-On macOS 12 or later, download **Snowfall-OS-macOS.zip** from the latest release, unzip it, and open **Snowfall OS.app**. Choose **View → Use as Desktop** to place the cabin behind your regular windows. Choose **Return to Window** from the app’s Dock menu to bring it back. [Download for Mac](https://github.com/ult666666/snowfall-os/releases/latest) · [Try the browser demo](https://ult666666.github.io/snowfall-os/)
+On macOS 12 or later, download **Snowfall-OS-macOS.zip**, unzip it, and open **Snowfall OS.app**. The wallpaper appears on every attached screen. Quit from the snowflake menu to return to your original wallpaper. [Download for Mac](https://github.com/ult666666/snowfall-os/releases/latest)
 
-![Snowfall OS desktop with a snowy cabin, Pip, and the Cabin Radio player](docs/desktop-preview.jpg)
+![Winter cabin and snow-covered trees in Snowfall OS](docs/desktop-preview.jpg)
 
-### Build your own copy
+The browser preview lets you play in the snow yard and try the cabin tools. The Mac download adds the live wallpaper, menu bar controls, window-edge snow, and shortcuts to installed apps. [Play in your browser](https://ult666666.github.io/snowfall-os/)
 
-With Apple’s Command Line Tools installed, run these commands from the project folder on your Mac. The script builds a universal app for Apple silicon and Intel. The downloadable app uses an ad-hoc signature. If macOS blocks it on first launch, building locally gives you a copy compiled on your Mac.
+### From the snowflake menu
+
+- **Roll a Snowball** or **Send the Snowplow** to see the action travel across the wallpaper, behind your regular windows.
+- **Wallpaper Image → Choose Image…** lets you use a picture from your Mac. Choose **Alpine Cabin** to return to the included scene.
+- **Snow on App Windows** adds a dusting along the tops of visible app windows. The effect uses their positions and sizes, lets clicks pass through, and respects the system’s Reduce Motion setting.
+- **Play in Snow** opens a resizable game window. Stack three snowballs to build Flurry, then challenge him. Click him to throw, and use the arrows to dodge the marked landing spot. First to three hits wins. In the plow activity, choose a snow pile to clear it and watch the tracks appear.
+- **Tools** opens an offline radio, notes, a 25-minute focus timer with five-minute breaks, and a field guide with three short AI product lessons. The menu also offers shortcuts to Apple’s Music, Notes, and Clock apps when installed.
+
+![Flurry standing in the clearing after three rolls](docs/snow-yard.jpg)
+
+The cabin saves your snowman, notes, timer state, radio favorites, and settings locally. The Mac app and browser preview each keep their own saved data.
+
+### Build from source
+
+Install Apple’s Command Line Tools, then run these commands in the project folder. The script produces a universal app for Apple silicon and Intel.
 
 ```sh
 ./build-mac.sh
 open "build/Snowfall OS.app"
 ```
 
-## A few things to try
-
-- **Cabin Radio.** Press play, skip between three original instrumentals, or tap the heart to save a favorite. The music keeps playing when you close its little window.
-- **Quick launch.** Open it from the desktop or press **⌘K**. Search for the focus timer to start a 25-minute session or a five-minute break.
-- **Field guide.** Work through three short decisions about what a language model could help a cabin visitor do. Each answer comes with feedback.
-- **Snow settings.** Select the weather control to change the snowfall or turn on **Reduce motion**. Say hello to Pip by clicking the hare.
-
-### Play in the snow yard
-
-Open **Snow yard** from the desktop to build. Click the parked yellow plow to jump straight to clearing a path.
-
-- **Build.** Choose **Roll & stack** or tap the loose snowball. Let each roll land. Three rolls build Flurry. He stays outside the cabin when you leave the yard. Click him there for a rematch.
-- **Snowball fight.** Click Flurry to throw, or use **Throw**. Move your mitten away from the marked landing spot with the arrow keys or on-screen arrows. First to three hits wins.
-- **Plow.** Tap a pile or choose **Plow next pile** to send the little plow across the yard. Clear all three, then choose **Fresh snowfall** to refill it.
-
-Your notes, snowman, timer state, radio favorites, and settings use local storage. The Mac app and browser demo each keep their own copy. Clearing the demo’s site data erases its saved items.
+The release uses an ad-hoc code signature and has no Apple notarization. If macOS blocks the downloaded copy, you can build it locally from the same source. [Build script](build-mac.sh)
 
 ## Learn how an AI product takes shape
 
-The wallpaper and album covers were generated with AI during development. The shipped app makes zero model calls. Hand-coded rules decide how the snow yard responds, and Web Audio plays a score by turning note numbers into oscillator frequencies. The bundled Mac app works offline. [Game rules](yard.js) · [Radio scores and synthesis](radio.js)
+The alpine landscape was generated with AI during development. The plow, snowballs, and snowman are rendered 3D miniatures with transparent backgrounds. Cabin Radio uses crops of that scenery for its sleeves. Each of its three original scores plays locally through Web Audio. Hand-coded rules decide where Flurry aims and which snow pile the plow clears. The bundled app works offline with zero model calls. [Game rules](yard.js) · [Radio scores and synthesis](radio.js)
 
-**Design exercise.** Imagine a visitor who writes “I have half an hour to finish my sketch” but doesn’t know which desktop tool to open. Try designing a guide that can suggest one next action.
+**Try a design exercise.** A visitor writes “I have half an hour to finish my sketch” but doesn’t know which tool to open. How could a future guide help?
 
-1. **Define success.** The visitor reaches the focus timer with one click after entering their request.
-2. **Limit the model’s choices.** Send the visitor’s request and a small list of allowed actions. Accept a single result such as `{"action":"focus"}`. Other allowed values could be `notes`, `radio`, and `clarify`. Show a button for the visitor to accept the suggestion.
-3. **Handle uncertainty.** If the model returns an unknown action, times out, or picks `clarify`, show the ordinary launcher. The visitor can choose a tool and carry on.
-4. **Test whether AI helps.** Ask friends for 20 requests and label the intended tool together, including requests with no clear match. Compare the model with a simple keyword rule on those same requests. Count correct suggestions, wrong-tool suggestions, and how often each option hands the choice back to the visitor.
+1. **Pick one outcome.** The visitor reaches the focus timer in one click after describing their goal.
+2. **Limit the model’s choices.** Give it the visitor’s request and four allowed actions, `focus`, `notes`, `radio`, and `clarify`. A result such as `{"action":"focus"}` would let the app show an **Open focus timer** button for the visitor to choose.
+3. **Plan for uncertainty.** If the response is invalid, arrives too late, or asks for clarification, show the ordinary list of tools. The visitor stays in control.
+4. **Test it.** Gather 20 requests and label the intended tool together with their authors. Include requests with no clear match. Compare the proposed guide with a simple keyword rule on the same requests. Count correct suggestions, incorrect suggestions, and cases handed back to the visitor.
 
-To trace a real interaction, open a note, type a sentence, and follow the `input` event into local storage. The same file contains the focus timer and field-guide lessons. [Mini-app source](apps.js) · [Mac window implementation](macos/main.swift)
-
-The bundled fonts are distributed under the SIL Open Font License. [DM Sans license](assets/fonts/DMSans-LICENSE.txt) · [Pixelify Sans license](assets/fonts/PixelifySans-LICENSE.txt)
+For a first code walkthrough, type a sentence into a cabin note and follow its `input` event into local storage. Then find how the timer remembers a deadline across sessions. [Mini-app source](apps.js) · [Native Mac implementation](macos/main.swift)

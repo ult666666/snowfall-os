@@ -24,31 +24,10 @@ test -f "$project/index.html"
 cp "$project"/*.html "$project"/*.css "$project"/*.js "$resources/Desktop/"
 cp -R "$project/assets" "$resources/Desktop/"
 
-# WebKit applies cross-origin font checks even to neighboring file:// URLs.
-# Embed these small assets in the Mac stylesheet to keep the pixel type offline.
-xcrun python3 - "$resources/Desktop" <<'PY'
-import base64
-from pathlib import Path
-import re
-import sys
-
-root = Path(sys.argv[1])
-stylesheet = root / "desktop.css"
-def embed(match):
-    path = root / match.group(2)
-    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-    return f'url("data:font/{path.suffix[1:]};base64,{encoded}")'
-
-pattern = r'''url\((['"]?)(assets/fonts/[^'")]+\.(?:ttf|woff2))\1\)'''
-stylesheet.write_text(re.sub(pattern, embed, stylesheet.read_text()))
-index = root / "index.html"
-index.write_text(re.sub(r'<link\b[^>]*\bas="font"[^>]*>\s*', '', index.read_text()))
-PY
-
 sdk="$(xcrun --sdk macosx --show-sdk-path)"
 for arch in arm64 x86_64; do
-    xcrun swiftc -O -sdk "$sdk" -target "$arch-apple-macos12.0" \
-        "$project/macos/main.swift" -o "$stage/$arch"
+    xcrun swiftc -parse-as-library -O -sdk "$sdk" -target "$arch-apple-macos12.0" \
+        "$project"/macos/*.swift -o "$stage/$arch"
 done
 xcrun lipo -create "$stage/arm64" "$stage/x86_64" -output "$app/Contents/MacOS/SnowfallOS"
 /usr/bin/codesign --force --sign - --identifier com.snowfallos.desktop "$app"
