@@ -130,7 +130,7 @@ html[data-surface="wallpaper"] #demo-village, .yard-active #demo-village { displ
 .village-house.studio { left:83%; top:65%; width:clamp(94px,9.7vw,170px); }
 .village-house.library { left:59%; top:84%; width:clamp(103px,11vw,187px); }
 #village-clock {
-  position:absolute; right:6.5%; top:12%; width:clamp(116px,11vw,170px); min-height:64px;
+  position:absolute; right:6.5%; top:26.5%; width:clamp(116px,11vw,170px); min-height:64px;
   display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
   border:0; border-radius:2px; padding:7px 8px 8px; pointer-events:auto;
   color:#4a4a38; background:radial-gradient(ellipse at 28% 24%,#fff2cf,#f0dcb9 83%); box-shadow:inset 0 0 0 2px #fff2d6;
@@ -157,8 +157,37 @@ html[data-surface="wallpaper"] #demo-village, .yard-active #demo-village { displ
   .village-house.studio { left:83%; top:62%; width:89px; }
   .village-house.library { left:52%; top:83%; width:101px; }
   .village-house span { font-size:10px; padding:1px 5px 2px; }
-  #village-clock { top:9%; right:5%; min-height:46px; width:96px; padding:5px; }
+  #village-clock { top:24%; right:5%; min-height:46px; width:96px; padding:5px; }
   #village-day { font-size:9px; }
   .scene-controls button { font-size:12px; padding-inline:8px; gap:4px; }
   .scene-controls [data-icon] svg { width:15px; }
 }
+
+#porch-play { position:absolute; inset:0; z-index:3; pointer-events:none; overflow:hidden; }
+#porch-play > * { position:absolute; pointer-events:none; user-select:none; -webkit-user-select:none; }
+.porch-flurry, .porch-mitten { transform:translate(-50%,-100%); transform-origin:50% 100%; height:auto; }
+.porch-ball, .porch-powder { aspect-ratio:1; border-radius:50%; transform:translate(-50%,-50%); }
+.porch-ball { background:radial-gradient(circle at 34% 25%,#fffcf1 14%,#e3eef1 53%,#a0b9c8 85%); box-shadow:0 1px 2px #55778061; }
+.porch-powder { background:#fffcf2; box-shadow:0 1px 1px #8ba4bf65; }
+.porch-bubble { transform:translate(-50%,-100%); padding:4px 9px; border-radius:12px 12px 12px 4px;
+  background:#fff5dff5; color:#473d38; box-shadow:0 2px 4px #53657728;
+  font:600 11px/1.3 ui-rounded,"Avenir Next",system-ui,sans-serif; white-space:nowrap; }
+.village-house { touch-action:manipulation; }
+.village-house:hover img, .village-house:focus-visible img { transform:scale(1.018); filter:brightness(1.04); }
+.village-house span { position:relative; margin-top:-7%; padding:2px 9px 3px; color:#53483c;
+  background:linear-gradient(177deg,#f2dab2,#e4c79e); border-color:#ac916d; box-shadow:0 1px 2px #647a8b30; }
+.village-house span::after { content:''; position:absolute; left:48%; top:100%; height:4px; width:3px;
+  background:#a28768; box-shadow:1px 1px 0 #c2cbd3; border-radius:0 0 1px 1px; }
+
+#wallpaper-cottages { position:absolute; inset:0; z-index:1; pointer-events:none; }
+html:not([data-surface="wallpaper"]) #wallpaper-cottages { display:none; }
+.wallpaper-cottage { position:absolute; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; }
+.wallpaper-cottage img { display:block; width:100%; height:auto; }
+.wallpaper-cottage span { max-width:130%; margin-top:-6%; padding:1px 4px 2px; border-radius:3px;
+  overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow-wrap:anywhere;
+  text-align:center; font:600 10px/1.12 ui-rounded,"Avenir Next",system-ui,sans-serif; color:#493d33;
+  background:linear-gradient(#f0d7ae,#e1c29a); border:1px solid #a88c6a; box-shadow:0 1px 2px #72819535; }
+.scenery-door { position:absolute; padding:0; border:0; border-radius:40% 40% 14% 14%;
+  background:transparent; transform:translate(-50%,-50%); pointer-events:auto; touch-action:manipulation; }
+.scenery-door:focus-visible { outline:2px dotted #315e59; outline-offset:2px; }
+.custom-image .scenery-door { display:none; }

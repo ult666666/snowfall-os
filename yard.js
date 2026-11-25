@@ -40,7 +40,7 @@
   }
   function sprite(name) {
     const img = element('img', 'yard-sprite');
-    img.src = sprites + name + '.png';
+    img.src = sprites + name + '.png?v=4.0.1';
     img.alt = '';
     img.draggable = false;
     return img;
@@ -72,7 +72,7 @@
     effects?.replaceChildren();
   }
   function reduced() {
-    return window.SnowApps?.settings ? !window.SnowApps.settings().motion : !!mediaQuery?.matches;
+    return !!mediaQuery?.matches || (window.SnowApps?.settings ? !window.SnowApps.settings().motion : false);
   }
   function applyMotion() { shell?.classList.toggle('yard-still', reduced()); }
   function loadLevel() {

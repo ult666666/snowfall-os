@@ -11,7 +11,12 @@ import CoreGraphics
     private let workspace = NSWorkspace.shared
     private let directory: URL
     private var ledger: URL { directory.appendingPathComponent("previous.json") }
-    private var village: URL { directory.appendingPathComponent("Frostpine Village.jpg") }
+    private var village: URL { directory.appendingPathComponent("Frostpine Hollow.jpg") }
+    private var previousEdition: URL { directory.appendingPathComponent("Frostpine Village.jpg") }
+
+    private func isManagedPicture(_ url: URL) -> Bool {
+        same(url, village) || same(url, previousEdition)
+    }
 
     init() {
         directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -58,7 +63,7 @@ import CoreGraphics
                   before.isFileURL, files.fileExists(atPath: before.path) else {
                 throw error("The previous wallpaper could not be saved. The live village is still available.")
             }
-            if same(before,village) {
+            if isManagedPicture(before) {
                 guard saved[id] != nil else { throw error("The previous picture for this display is unavailable.") }
                 continue
             }
@@ -70,10 +75,11 @@ import CoreGraphics
         let data = try Data(contentsOf: scene)
         guard NSImage(data: data) != nil else { throw error("The village picture could not be opened.") }
         try save(saved)
-        try data.write(to: village, options: .atomic)
+        let changed = !files.contentsEqual(atPath: scene.path, andPath: village.path)
+        if changed { try data.write(to: village, options: .atomic) }
         var count = 0
         for screen in screens {
-            if !same(workspace.desktopImageURL(for: screen),village) {
+            if changed || !same(workspace.desktopImageURL(for: screen),village) {
                 try workspace.setDesktopImageURL(village, for: screen, options: [
                     .imageScaling: NSNumber(value: NSImageScaling.scaleProportionallyUpOrDown.rawValue),
                     .allowClipping: true
@@ -93,7 +99,7 @@ import CoreGraphics
                 throw error("macOS could not report this display’s current wallpaper. Try restoring again.")
             }
             // Respect a newer picture chosen outside Snowfall.
-            if same(current,village) {
+            if isManagedPicture(current) {
                 guard files.fileExists(atPath: record.previousURL.path) else {
                     throw error("The previous picture is unavailable. Its saved reference has been kept.")
                 }

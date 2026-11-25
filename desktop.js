@@ -99,7 +99,10 @@
     updateClock();
     setInterval(updateClock,15000);
     for(const button of document.querySelectorAll('[data-sample]')) {
-      button.addEventListener('click',() => showTools('houses',button.dataset.sample));
+      button.addEventListener('click', event => {
+        if (event.detail < 2) SnowPorches.tap(SnowPorches.samplePlot(button));
+      });
+      button.addEventListener('dblclick', () => showTools('houses',button.dataset.sample));
     }
   }
 
@@ -125,6 +128,7 @@
       return;
     }
     if (inYard) leaveYard();
+    SnowPorches.stop();
     const wasClosed = panel.hidden;
     cleanup();
     panel.hidden = false;
@@ -185,6 +189,7 @@
     SnowYard.exit();
     inYard = false;
     scene.classList.remove('yard-active');
+    SnowPorches.invalidate();
     $('#back-to-desk').hidden = true;
     wake();
   }
@@ -197,6 +202,8 @@
     if (inYard) leaveYard();
     inYard = true;
     scene.classList.add('yard-active');
+    SnowPorches.stop();
+    SnowPorches.invalidate();
     $('#back-to-desk').hidden = false;
     SnowYard.enter(activity);
     $('#back-to-desk').focus({preventScroll:true});
@@ -228,7 +235,7 @@
     if (custom !== null && (typeof custom !== 'string' || !custom.startsWith('data:image/jpeg;base64,'))) return;
     const revision = ++imageRevision;
     const replacement = new Image();
-    replacement.src = custom || 'assets/scene.jpg';
+    replacement.src = custom || 'assets/scene.jpg?v=4.0.1';
     try {
       await replacement.decode();
       if (revision !== imageRevision) return;
@@ -277,6 +284,7 @@
       e.preventDefault();
       if (panel.hidden) showTools(); else closeTools(true);
     } else if (e.key === 'Escape') {
+      SnowPorches.stop();
       if (!panel.hidden) { e.preventDefault(); if (activeTool) showTools(); else closeTools(true); }
       else if (inYard) { e.preventDefault(); finishYard(); }
       else if (isMacApp) bridge.postMessage('wallpaper');

@@ -31,6 +31,11 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private var routeRevision = 0
     private var desiredHouseID: String?
     private var rooms: HouseRooms!
+    private let porches = DesktopHouseInteraction()
+    private var animatedPorchClicks = 0
+    private var localPorchClicks = 0
+    private let doors = PorchTargets()
+    private lazy var doorstep = DoorstepFeedback(assets:webRoot.appendingPathComponent("assets", isDirectory:true))
     private var regularFrame: NSRect?
     private var smokeOpenedFolders = 0
     private var status: NSStatusItem!
@@ -67,6 +72,22 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         do { try setUpRooms() }
         catch { fail("Could not initialize the folder houses."); return }
         installMenus()
+        porches.onLayout = { [weak self] in self?.syncPorchTargets() }
+        porches.onTap = { [weak self] plot in self?.playAtDoor(plot) }
+        doors.onVisibility = { [weak self] in self?.sendAllPlots() }
+        doors.onTap = { [weak self] plot in
+            self?.localPorchClicks += 1
+            self?.playAtDoor(plot)
+        }
+        doors.onOpen = { [weak self] id in
+            self?.doorstep.dismiss()
+            self?.rooms.openFolder(id:id)
+        }
+        doors.onRoom = { [weak self] id in self?.show(.houses, houseID:id) }
+        if !smokeTest {
+            DistributedNotificationCenter.default().addObserver(self, selector: #selector(reportPorchStatus(_:)),
+                                                               name: DesktopHouseInteraction.statusRequest, object: nil)
+        }
         NSApp.servicesProvider = rooms
         rooms.start(applyRequested: !smokeTest && CommandLine.arguments.contains("--apply-houses"))
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -84,6 +105,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
             smokeDeadline = Timer.scheduledTimer(timeInterval: 55, target: self, selector: #selector(smokeTimeout), userInfo: nil, repeats: false)
         }
         syncScreens()
+        if !smokeTest { syncPorchTargets() }
         applyFramePreference()
         if !smokeTest && CommandLine.arguments.contains("--set-village-wallpaper") { setVillagePicture(nil) }
     }
@@ -106,7 +128,12 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         rooms.openPicker = { [weak self] in self?.show(.houses) }
         rooms.openRoom = { [weak self] id in self?.show(.houses, houseID: id) }
         rooms.sendState = { [weak self] state in
-            guard let self = self, let view = self.previewView, self.previewReady else { return }
+            guard let self else { return }
+            if !smokeTest {
+                self.porches.setHouses(self.rooms.model.houses)
+                self.syncPorchTargets()
+            }
+            guard let view = self.previewView, self.previewReady else { return }
             view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-houses', {detail: state}));",
                                      arguments: ["state": state], in: nil, in: .page)
         }
@@ -271,6 +298,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     }
 
     private func publishImage() {
+        if !smokeTest { syncPorchTargets() }
         alpineChoice.state = picture.dataURL == nil ? .on : .off
         imageRevision += 1
         for background in backgrounds.values { sendImage(to: background.view) }
@@ -317,6 +345,54 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private func sendWidgetFrames(_ frames: [[String: Double]], to view: WKWebView) {
         view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-widget-frames', {detail: frames}));",
                                  arguments: ["frames": frames], in: nil, in: .page)
+    }
+
+    private func playAtDoor(_ plot: DesktopHouseInteraction.Plot) {
+        if doorstep.tap(plot) { animatedPorchClicks += 1 }
+    }
+
+    private func syncPorchTargets() {
+        doors.configure(plots:porches.plots, houses:rooms.model.houses, scenery:picture.dataURL == nil)
+        sendAllPlots()
+    }
+
+    private func sendAllPlots() {
+        for (id, surface) in backgrounds where surface.ready { sendPlots(display:id, to:surface.view) }
+    }
+
+    private func sendPlots(display: NSNumber, to view: WKWebView) {
+        let drawHouse = !doors.finderDisplays.contains(display.uint32Value)
+        let plots = porches.plots.filter { $0.display == display.uint32Value }.compactMap { plot -> [String: Any]? in
+            guard let house = rooms.model.houses.first(where: { $0.id == plot.id }) else { return nil }
+            var payload = plot.payload
+            payload["drawHouse"] = drawHouse
+            payload["name"] = house.name
+            payload["variant"] = house.variant
+            return payload
+        }
+        view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-house-plots', {detail: plots}));",
+                                 arguments: ["plots": plots], in: nil, in: .page)
+    }
+
+    private func sendPorchTap(_ plot: DesktopHouseInteraction.Plot, to view: WKWebView) {
+        let script = """
+        window.dispatchEvent(new CustomEvent('snowfall-house-tap', {detail: plot}));
+        return Boolean(document.querySelector('.porch-flurry'));
+        """
+        view.callAsyncJavaScript(script, arguments: ["plot": plot.payload], in: nil, in: .page) { [weak self] result in
+            if !smokeTest, case .success(let rendered) = result, rendered as? Bool == true { self?.animatedPorchClicks += 1 }
+        }
+    }
+
+    @objc private func reportPorchStatus(_ note: Notification) {
+        guard let id = note.object as? String, UUID(uuidString: id) != nil else { return }
+        let data: [String: Any]
+        if note.userInfo?["hitPoint"] as? Bool == true { data = doors.testPoint() }
+        else { data = ["observing":porches.observing, "located":porches.plots.count, "animatedClicks":animatedPorchClicks,
+                       "nativeTargets":doors.count, "localClicks":localPorchClicks,
+                       "finderDrawing":doors.finderDisplays.count, "feedbackVisible":doorstep.isVisible] }
+        DistributedNotificationCenter.default().postNotificationName(DesktopHouseInteraction.statusReply, object:id,
+                                                                   userInfo:data, deliverImmediately:true)
     }
 
     private func makeView(surface: String) -> WKWebView {
@@ -382,7 +458,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
                 continue
             }
             let window = WallpaperWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
-            window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopWindow)) + 1)
+            window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.desktopIconWindow)) - 1)
             window.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
             window.isReleasedWhenClosed = false
             window.isExcludedFromWindowsMenu = true
@@ -403,6 +479,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     func applicationDidChangeScreenParameters(_ notification: Notification) {
         if webRoot != nil {
             syncScreens()
+            if !smokeTest { doorstep.dismiss(); porches.refresh(force:true); syncPorchTargets() }
             if !smokeTest && UserDefaults.standard.bool(forKey: framesPreference) { widgetFrames.refresh() }
         }
     }
@@ -526,6 +603,10 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
     func applicationWillTerminate(_ notification: Notification) {
+        DistributedNotificationCenter.default().removeObserver(self)
+        porches.stop()
+        doors.stop()
+        doorstep.dismiss()
         snow.shutdown()
         if !smokeTest { widgetFrames.stop() }
         NSApp.servicesProvider = nil
@@ -633,6 +714,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
             guard let self = self, let current = self.backgrounds[id], current.view === webView else { return }
             if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
             self.backgrounds[id]?.ready = true
+            self.sendPlots(display: id, to: current.view)
             self.sendWidgetFrames(self.cachedFrames[id] ?? [], to: current.view)
             current.window.orderFrontRegardless()
             self.backgrounds[id]?.pendingActions.removeAll()
@@ -667,13 +749,19 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
             fail("No display available to test a wallpaper action.")
             return
         }
+        guard DesktopHouseInteraction.checkGestures() else { fail("House click or drag filtering failed."); return }
+        let frame = CGDisplayBounds(id.uint32Value)
+        let testPlot = DesktopHouseInteraction.Plot(id: "fixture-house", center: CGPoint(x:frame.midX, y:frame.midY),
+                                                    size:64, display:id.uint32Value, frame:frame)
+        sendPorchTap(testPlot, to: view)
         setWidgetFrames([["x": 0.12, "y": 0.15, "width": 0.08, "height": 0.12]], display: id)
         let before = """
+        if (!document.querySelector('.porch-flurry')) throw new Error('A native house tap did not start a snowball exchange.');
         if (window.__widgetFrames?.[0]?.x !== 0.12) throw new Error('The synthetic native widget-frame geometry did not arrive.');
         const controls = document.querySelector('#surface-controls');
         if (!controls || controls.getClientRects().length && getComputedStyle(controls).visibility !== 'hidden')
           throw new Error('Interactive controls are visible on the wallpaper.');
-        if (!(document.querySelector('#wallpaper')?.naturalWidth > 1000)) throw new Error('Full wallpaper asset is missing.');
+        if (document.querySelector('#wallpaper')?.naturalWidth !== 2560) throw new Error('Full wallpaper asset is missing.');
         if (Number(localStorage.getItem('snowfall-os.snowman') || 0) !== 0) throw new Error('The isolated snow yard did not start empty.');
         """
         view.callAsyncJavaScript(before, arguments: [:], in: nil, in: .page) { [weak self] result in
@@ -814,14 +902,14 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         guard !FileManager.default.fileExists(atPath: picture.file.path), let view = backgrounds.values.first?.view else {
             fail("The bundled wallpaper could not be restored."); return
         }
-        let check = "await window.snowfallImageReady; const img = document.querySelector('#wallpaper'); await img.decode(); return img.currentSrc.endsWith('/assets/scene.jpg') && img.naturalWidth > 1000;"
+        let check = "await window.snowfallImageReady; const img = document.querySelector('#wallpaper'); await img.decode(); return new URL(img.currentSrc).pathname.endsWith('/assets/scene.jpg') && img.naturalWidth === 2560;"
         view.callAsyncJavaScript(check, arguments: [:], in: nil, in: .page) { [weak self] result in
             guard let self = self else { return }
             guard case .success(let value) = result, value as? Bool == true else {
                 self.fail("The restored village scene did not appear."); return
             }
             self.smokeDeadline?.invalidate()
-            print("PASS: click-through wallpaper on \(self.backgrounds.count) display(s), roll and plow, native tools and play, local storage, trusted bridge, local picture conversion/selection, widget frame delivery, synthetic Finder folder styling/restoration, Finder Services, per-house notebook, and restoring the village scene.")
+            print("PASS: click-through wallpaper on \(self.backgrounds.count) display(s), roll and plow, native tools and play, local storage, trusted bridge, local picture conversion/selection, widget frame delivery, porch click and drag routing, synthetic Finder folder styling/restoration, Finder Services, per-house notebook, and restoring the village scene.")
             NSApp.terminate(nil)
         }
     }
@@ -849,6 +937,18 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
 @main
 private enum Snowfall {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--porch-hitpoint") { exit(DesktopHouseInteraction.printSessionStatus(hitPoint:true)) }
+        if CommandLine.arguments.contains("--porch-session-status") { exit(DesktopHouseInteraction.printSessionStatus()) }
+        if CommandLine.arguments.contains("--porch-layout-status") {
+            guard let root = Bundle.main.resourceURL else { print("{\"error\":\"Missing bundled resources\"}"); exit(1) }
+            let village = FolderVillage(assets: root.appendingPathComponent("Desktop/assets/houses", isDirectory: true))
+            do { try village.inspect() }
+            catch { print("{\"error\":\"Finder houses unavailable\"}"); exit(1) }
+            let porches = DesktopHouseInteraction()
+            porches.setHouses(village.houses, observe: false)
+            print("{\"styled\":\(village.houses.count),\"located\":\(porches.plots.count),\"size\":\(Int(porches.size))}")
+            exit(0)
+        }
         if CommandLine.arguments.contains("--village-status") {
             guard let root = Bundle.main.resourceURL else { print("{\"error\":\"Missing bundled resources\"}"); exit(1) }
             exit(HouseRooms.printStatus(assets: root.appendingPathComponent("Desktop/assets/houses", isDirectory: true)))

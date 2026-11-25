@@ -1,6 +1,7 @@
 import AppKit
 import CryptoKit
 import Darwin
+import ImageIO
 
 /// Owns only the Finder artwork on eligible immediate children of the selected Desktop.
 @MainActor
@@ -20,8 +21,9 @@ final class FolderVillage: NSObject {
         var bookmark: Data?
         let variant: Int
         let original: Icon
-        let expected: Icon
+        var expected: Icon
         var installed: Icon?
+        var upgradingFrom: Icon?
         var backupDigest: String?
         var restoring: Bool?
         var overridden = false
@@ -56,8 +58,11 @@ final class FolderVillage: NSObject {
     private var ledger = Ledger()
     private var watcher: DispatchSourceFileSystemObject?
     private var changes: DispatchWorkItem?
-    private var images: [Int: NSImage] = [:]
-    private var signatures: [Int: Icon] = [:]
+    private struct Artwork {
+        let fork: Data
+        let signature: Icon
+    }
+    private var artwork: [Int: Artwork] = [:]
     private let files = FileManager.default
     private var registry: URL { storage.appendingPathComponent("state.json") }
     private var copies: URL { storage.appendingPathComponent("originals", isDirectory: true) }
@@ -99,7 +104,7 @@ final class FolderVillage: NSObject {
     func apply() throws {
         try mutate {
             let current = try folders()  // Ask the OS for access before committing the opt-in.
-            for variant in 1...6 { _ = try image(variant) }
+            for variant in 1...6 { _ = try houseArt(variant) }
             ledger.enabled = true
             try persist()
             try reconcile(current)
@@ -219,24 +224,69 @@ final class FolderVillage: NSObject {
         return try identity(old) == id ? old : nil
     }
 
-    private func image(_ number: Int) throws -> NSImage {
-        if let image = images[number] { return image }
+    private func houseArt(_ number: Int) throws -> Artwork {
+        if let cached = artwork[number] { return cached }
         let url = assets.appendingPathComponent("cottage-\(number).png")
-        guard let art = NSImage(contentsOf: url), art.isValid else { throw Issue.artwork }
-        images[number] = art
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+              CGImageSourceGetType(source) as String? == "public.png",
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else { throw Issue.artwork }
+        let png: Data
+        if image.width == 256, image.height == 256 {
+            // Preserve the bundled PNG's palette and compression across every Finder copy.
+            png = try Data(contentsOf: url)
+        } else {
+            guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 256, pixelsHigh: 256,
+                    bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                    colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+                  let context = NSGraphicsContext(bitmapImageRep: bitmap) else { throw Issue.artwork }
+            let scale = 256 / CGFloat(max(image.width, image.height))
+            let size = CGSize(width: CGFloat(image.width) * scale, height: CGFloat(image.height) * scale)
+            let bounds = CGRect(x: (256 - size.width) / 2, y: (256 - size.height) / 2, width: size.width, height: size.height)
+            context.cgContext.interpolationQuality = .high
+            context.cgContext.draw(image, in: bounds)
+            guard let encoded = bitmap.representation(using: .png, properties: [:]) else { throw Issue.artwork }
+            png = encoded
+        }
+
+        // Finder's custom folder icon is the 'icns' resource (-16455) of Icon\r.
+        // One 256px PNG serves both desktop zoom and Retina without duplicate bitmap sizes.
+        func word(_ value: Int) -> Data {
+            var encoded = UInt32(value).bigEndian
+            return withUnsafeBytes(of: &encoded) { Data($0) }
+        }
+        let part = Data("ic08".utf8) + word(8 + png.count) + png
+        let family = Data("icns".utf8) + word(8 + part.count) + part
+        let payload = word(family.count) + family
+        let header = word(256) + word(256 + payload.count) + word(payload.count) + word(50)
+        // Resource map: one type at +28, one unnamed resource, no attributes or handles.
+        let map = header + Data([0,0,0,0, 0,0, 0,0, 0,28, 0,50, 0,0])
+            + Data("icns".utf8) + Data([0,0, 0,10, 0xbf,0xb9, 0xff,0xff, 0,0,0,0, 0,0,0,0])
+        let art = Artwork(fork: header + Data(repeating: 0, count: 240) + payload + map,
+                          signature: Icon(custom: true, file: digest(Data()) + digest(payload)))
+        artwork[number] = art
         return art
     }
 
-    private func expected(_ variant: Int) throws -> Icon {
-        if let icon = signatures[variant] { return icon }
-        let staging = storage.appendingPathComponent("render-" + UUID().uuidString, isDirectory: true)
-        try files.createDirectory(at: staging, withIntermediateDirectories: false)
-        defer { try? files.removeItem(at: staging) }
-        guard NSWorkspace.shared.setIcon(try image(variant), forFile: staging.path, options: []) else { throw Issue.artwork }
-        let signature = try currentIcon(staging)
-        guard signature.custom, signature.file != nil else { throw Issue.artwork }
-        signatures[variant] = signature
-        return signature
+    private func writeAttribute(_ name: String, bytes: Data, at url: URL) throws {
+        let status = bytes.withUnsafeBytes { setxattr(url.path, name, $0.baseAddress, bytes.count, 0, XATTR_NOFOLLOW) }
+        guard status == 0 else { throw posixOr(.icon) }
+    }
+
+    private func install(_ art: Artwork, id: String, in folder: URL, replacing before: Icon) throws {
+        let temporary = folder.appendingPathComponent(".snowfall-icon-" + UUID().uuidString)
+        try Data().write(to: temporary, options: .withoutOverwriting)
+        defer { try? files.removeItem(at: temporary) }
+        try writeAttribute("com.apple.ResourceFork", bytes: art.fork, at: temporary)
+        var hidden = Data(repeating: 0, count: 32)
+        hidden[8] = 0x40  // Finder's invisible bit on the icon file, never on the directory.
+        try writeAttribute("com.apple.FinderInfo", bytes: hidden, at: temporary)
+        guard try identity(folder) == id, try currentIcon(folder) == before else { throw Issue.conflict }
+        guard rename(temporary.path, iconFile(folder).path) == 0 else { throw posixOr(.folder) }
+        // Notify views caching an older custom icon about the directory itself as well as Icon\r.
+        try setFlag(true, on: folder, refresh: true)
+        guard try currentIcon(folder) == art.signature else { throw Issue.folder }
+        NSWorkspace.shared.noteFileSystemChanged(folder.path)
+        NSWorkspace.shared.noteFileSystemChanged(folder.deletingLastPathComponent().path)
     }
 
     private func variant(for id: String) -> Int {
@@ -290,12 +340,12 @@ final class FolderVillage: NSObject {
         return Icon(custom: custom, file: digest(dataFork) + digest(payload))
     }
 
-    private func setFlag(_ custom: Bool, on folder: URL) throws {
+    private func setFlag(_ custom: Bool, on folder: URL, refresh: Bool = false) throws {
         var bytes = try attribute("com.apple.FinderInfo", at: folder) ?? Data(repeating: 0, count: 32)
         guard bytes.count == 32 else { throw Issue.icon }
         let old = bytes[8]
         bytes[8] = custom ? old | 4 : old & ~4
-        if bytes[8] == old { return }
+        if bytes[8] == old && !refresh { return }
         let status = bytes.withUnsafeBytes { setxattr(folder.path, "com.apple.FinderInfo", $0.baseAddress, 32, 0, XATTR_NOFOLLOW) }
         guard status == 0 else { throw posixOr(.icon) }
     }
@@ -351,17 +401,37 @@ final class FolderVillage: NSObject {
                 try persist()
             }
             if saved.overridden { return }
+            let target = try houseArt(saved.variant).signature
             if let installed = saved.installed {
-                if current != installed { saved.overridden = true; ledger.entries[id] = saved; try persist() }
+                guard current == installed else {
+                    saved.overridden = true
+                    ledger.entries[id] = saved
+                    try persist()
+                    return
+                }
+                if installed == target { return }
+            } else if current == target {
+                // The previous process completed the filesystem write before committing its ledger.
+                saved.expected = target
+                saved.installed = current
+                saved.upgradingFrom = nil
+                ledger.entries[id] = saved
+                try persist()
                 return
+            } else {
+                guard current == saved.original || current == saved.upgradingFrom ||
+                      current.file == saved.expected.file else { throw Issue.conflict }
             }
-            if current == saved.expected { saved.installed = current; ledger.entries[id] = saved; try persist(); return }
-            guard current == saved.original || current.file == saved.expected.file else { throw Issue.conflict }
+            saved.upgradingFrom = current
+            saved.expected = target
+            saved.installed = nil
+            ledger.entries[id] = saved
+            try persist()   // Keep the older managed signature recognizable until the new one is verified.
             entry = saved
         } else {
             guard !current.custom || current.file != nil else { throw Issue.icon }
             let number = variant(for: id)
-            let target = try expected(number)
+            let target = try houseArt(number).signature
             var preserved: String?
             if current.file != nil {
                 try files.createDirectory(at: copies, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
@@ -379,11 +449,10 @@ final class FolderVillage: NSObject {
             ledger.variants[id] = number
             try persist()     // Record the precise original and expected result before touching Finder.
         }
-        guard try identity(url) == id, try currentIcon(url) == current else { throw Issue.conflict }
-        guard NSWorkspace.shared.setIcon(try image(entry.variant), forFile: url.path, options: []) else { throw Issue.folder }
-        let installed = try currentIcon(url)
-        guard installed.custom, installed.file != nil else { throw Issue.folder }
-        entry.installed = installed
+        let art = try houseArt(entry.variant)
+        try install(art, id: id, in: url, replacing: current)
+        entry.installed = art.signature
+        entry.upgradingFrom = nil
         ledger.entries[id] = entry
         try persist()
     }
@@ -391,7 +460,7 @@ final class FolderVillage: NSObject {
     private func undo(id: String, entry: Entry, folder: URL) throws {
         guard try identity(folder) == id else { throw Issue.missing }
         let live = try currentIcon(folder)
-        let ours = live == (entry.installed ?? entry.expected)
+        let ours = live == (entry.installed ?? entry.expected) || live == entry.upgradingFrom
         let pendingWrite = entry.installed == nil && live.file == entry.expected.file
         let pendingFlag = entry.restoring == true && live.file == entry.original.file
         if !entry.overridden && live != entry.original && (ours || pendingWrite || pendingFlag) {

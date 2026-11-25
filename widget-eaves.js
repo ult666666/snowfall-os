@@ -8,7 +8,7 @@
   let pending = 0;
   const trim = new Image();
   trim.onload = schedule;
-  trim.src = 'assets/widget-cottage.webp';
+  trim.src = 'assets/widget-cottage.webp?v=4.0.1';
 
   function cottage(ctx, r, others) {
     // A nine-slice keeps the painted posts narrow and the berries round on large widgets.
@@ -24,6 +24,19 @@
     const roof=Math.max(5,Math.min(headroom,w*.32,r.preview ? 58 : 55));
     const side=r.preview ? Math.min(26,w*.17) : Math.min(16,w*.075);
     const sill=Math.min(r.preview ? 24 : 13,h*.19);
+    if(r.preview) {
+      const foot = y+h+sill;
+      ctx.save();
+      ctx.translate(x+w*.53,foot+10);
+      ctx.scale(1,.16);
+      const cast=ctx.createRadialGradient(0,0,0,0,0,w*.69);
+      cast.addColorStop(0,'rgba(104,127,151,.24)'); cast.addColorStop(1,'rgba(160,181,199,0)');
+      ctx.fillStyle=cast; ctx.fillRect(-w*.7,-w*.7,w*1.4,w*1.4); ctx.restore();
+      for(const offset of [.09,.86]) {
+        ctx.fillStyle='#9e8369'; ctx.fillRect(x+w*offset,foot-9,4,20);
+        ctx.fillStyle='#d5baa0'; ctx.fillRect(x+w*offset,foot-7,1.5,18);
+      }
+    }
     const sx=[0,145,848,1000],sy=[0,232,518,667];
     const dx=[x-side,x,x+w,x+w+side],dy=[y-roof,y,y+h,y+h+sill];
     for(let row=0;row<3;row++) {
@@ -45,12 +58,14 @@
       const a=demo.getBoundingClientRect(), b=canvas.getBoundingClientRect();
       visible=[{x:a.x-b.x,y:a.y-b.y,w:a.width,h:a.height,preview:true}];
     }
-    if(!visible.length) { canvas.width=1;canvas.height=1;return; }
+    const porches = SnowPorches.visiblePlots();
+    if(!visible.length && !porches.length) { canvas.width=1;canvas.height=1;return; }
     const scale=Math.min(window.devicePixelRatio || 1,2);
     const pixelsW=Math.round(w*scale),pixelsH=Math.round(h*scale);
     if(canvas.width!==pixelsW || canvas.height!==pixelsH) { canvas.width=pixelsW;canvas.height=pixelsH; }
     const ctx=canvas.getContext('2d'); if (!ctx) return;
     ctx.setTransform(scale,0,0,scale,0,0);ctx.clearRect(0,0,w,h);
+    SnowPorches.paint(ctx,w,h,porches);
     visible.forEach(r=>cottage(ctx,r,visible));
   }
   function schedule() { if(!pending) pending=requestAnimationFrame(paint); }
@@ -60,6 +75,8 @@
     schedule();
   });
   window.addEventListener('resize',schedule);
+  window.addEventListener('snowfall-porches-changed',schedule);
+  for (const image of document.querySelectorAll('[data-sample] img')) new ResizeObserver(schedule).observe(image);
   window.addEventListener('snowfall-surface',schedule);
   new ResizeObserver(schedule).observe(demo);
   schedule();

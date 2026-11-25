@@ -25,10 +25,20 @@ cp "$project"/*.html "$project"/*.css "$project"/*.js "$resources/Desktop/"
 cp -R "$project/assets" "$resources/Desktop/"
 
 sdk="$(xcrun --sdk macosx --show-sdk-path)"
-for arch in arm64 x86_64; do
-    xcrun swiftc -parse-as-library -O -sdk "$sdk" -target "$arch-apple-macos12.0" \
+build_arch() {
+    local arch="$1"
+    xcrun swiftc -parse-as-library -Osize -whole-module-optimization -Xlinker -dead_strip -sdk "$sdk" -target "$arch-apple-macos12.0" \
         "$project"/macos/*.swift -o "$stage/$arch"
-done
+    xcrun strip -x "$stage/$arch"
+}
+build_arch arm64 &
+arm_pid=$!
+build_arch x86_64 &
+intel_pid=$!
+failed=0
+wait "$arm_pid" || failed=1
+wait "$intel_pid" || failed=1
+if (( failed )); then exit 1; fi
 xcrun lipo -create "$stage/arm64" "$stage/x86_64" -output "$app/Contents/MacOS/SnowfallOS"
 /usr/bin/codesign --force --sign - --identifier com.snowfallos.desktop "$app"
 /usr/bin/codesign --verify --strict --all-architectures "$app"
