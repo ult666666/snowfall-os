@@ -54,26 +54,6 @@ struct VillageComposition: Decodable {
         return plan
     }
 
-    /// Fixed-size foreground props stay legible on large displays. Choose one clear
-    /// patch of ground before assigning any cottage addresses.
-    static func playgroundSite(usable: CGRect, obstacles: [CGRect]) -> CGRect? {
-        let edge: CGFloat = 10
-        let width = min(464, max(325, usable.width * 0.36), usable.width - edge * 2)
-        let height = min(122, max(95, usable.height * 0.14), usable.height * 0.28)
-        guard width >= 185, height >= 72 else { return nil }
-        let left = usable.minX + edge, right = usable.maxX - edge - width
-        for lift: CGFloat in [0, height * 0.65, height * 1.3] {
-            for center: CGFloat in [0.5, 0.76, 0.24, 1, 0] {
-                let x = min(right, max(left, usable.minX + center * usable.width - width / 2))
-                let rect = CGRect(x:x, y:usable.maxY - edge - height - lift, width:width, height:height)
-                if usable.contains(rect), !obstacles.contains(where: { $0.intersects(rect.insetBy(dx:-3, dy:-3)) }) {
-                    return rect
-                }
-            }
-        }
-        return nil
-    }
-
     /// Keep the roof and the painted address sign within the same clickable plot.
     static func cottageBounds(center: CGPoint, size: CGFloat, viewportWidth: CGFloat) -> CGRect {
         let plaqueWidth = viewportWidth >= 1000 ? min(158, max(106, size + 28)) : min(132, max(78, size + 14))
@@ -89,7 +69,6 @@ struct VillageComposition: Decodable {
         guard !ids.isEmpty, !frame.isEmpty else { return [] }
         let art = Projection(frame, width: width, height: height)
         var obstacles = widgets.map { $0.insetBy(dx: -6, dy: -5) }
-        if let field = Self.playgroundSite(usable:usable, obstacles:widgets) { obstacles.append(field.insetBy(dx:-4,dy:-4)) }
         obstacles.append(art.rect(x: 0, y: 0.32, width: 0.303, height: 0.318))
         let bounds = usable.insetBy(dx: 4, dy: 4)
         var placed: [DesktopHouseInteraction.Plot] = []
@@ -115,9 +94,8 @@ struct VillageComposition: Decodable {
         // Reserve everyone's own address before rehoming a cottage covered by a widget.
         var waiting: [String] = []
         if !widgets.isEmpty {
-            // Resolve everyone's permanent address first, including houses that had
-            // to leave a parcel to make room for the foreground meadow. One new
-            // widget can then displace only the neighbors it actually covers.
+            // Reserve prior addresses first so adding a widget displaces only
+            // the neighbors it actually covers.
             let baseline = plots(ids:ids, display:display, frame:frame, usable:usable,
                                  widgets:[], preferred:preferred)
             for home in baseline {
@@ -166,8 +144,7 @@ struct VillageComposition: Decodable {
             let placed = plots(ids: ids, display: 2, frame: frame, usable: usable, widgets: [widget])
             let repeated = plots(ids: Array(ids.reversed()), display: 2, frame: frame, usable: usable, widgets: [widget])
             guard Set(placed.map(\.id)) == Set(ids), placed == repeated else { return false }
-            guard let field = Self.playgroundSite(usable:usable,obstacles:[widget]), usable.contains(field) else { return false }
-            var occupied = [widget, field]
+            var occupied = [widget]
             for plot in placed {
                 let door = PorchTargets.Door(plot: plot, drawHouse: true, folder: nil, title: "")
                 guard usable.contains(door.target), !occupied.contains(where: { $0.intersects(door.target) }),

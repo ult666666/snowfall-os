@@ -4,7 +4,6 @@
   'use strict';
   const scene = document.querySelector('#scene');
   const layer = document.querySelector('#free-snow');
-  const meadow = document.querySelector('#snow-playground');
   const panel = document.querySelector('#tools-panel');
   const bridge = window.webkit?.messageHandlers?.snowfallWindow;
   const keyPrefix = 'snowfall-os.free-snow.v1.';
@@ -43,19 +42,16 @@
   const caption = create('span','free-snow-caption');
   const live = create('span','sr-only');
   live.setAttribute('role','status');
-  const hint = create('span','free-snow-hint',meadow);
-  hint.textContent = 'Click snow to throw · Hold to build';
   marker.hidden = cursor.hidden = caption.hidden = packingRing.hidden = true;
   let widgetFrames = [];
   let figures = readFigures(), held = null, round = null, last = {x:.5,y:.65};
   let totals = {shots:0, returns:0, dodges:0, player:0, flurry:0};
-  let timer, captionTimer, captionRival = null, learnedBuild = false, learnedThrow = false;
+  let timer, captionTimer, captionRival = null;
   let published = '', pointerId = null, keyboardHeld = false;
 
   function enabled() {
     return !scene.matches('.yard-active,.room-mode,.custom-image') &&
-      panel.hidden && !document.querySelector('dialog[open]') &&
-      (!meadow.dataset.mode || meadow.dataset.mode === 'idle');
+      panel.hidden && !document.querySelector('dialog[open]');
   }
   function state() {
     return {snowmen:figures.length, holding:Boolean(held), holdStage:held?.stage || 0,
@@ -65,7 +61,6 @@
   function publish() {
     scene.classList.toggle('free-snow-playing', Boolean(round || held));
     packingRing.hidden = !held;
-    hint.hidden = !enabled() || Boolean(round || held) || (learnedBuild && learnedThrow);
     if (!bridge || window.snowfallSurface !== 'wallpaper') return;
     const snapshot = state(), signature = JSON.stringify(snapshot);
     if (signature === published) return;
@@ -139,7 +134,6 @@
     if (p.stage > 0) other.push(p);
     figures = other.slice(-maxFigures);
     try { localStorage.setItem(saveKey,JSON.stringify(figures)); } catch {}
-    learnedBuild = true;
     label(['Swept away','A snowball!','Two snowballs!','A new snow friend!'][p.stage],p);
     if (!held.brushing) {
       window.dispatchEvent(new CustomEvent('snowfall-planted',{detail:{x:p.x,y:p.y,stage:p.stage}}));
@@ -176,7 +170,7 @@
     const dx = clamp(w*.10,68,146)/w, dy = clamp(h*.055,24,57)/h;
     const side = p.x < .5 ? 1 : -1;
     const obstacles = [...scene.querySelectorAll(
-      '.village-house,.wallpaper-cottage,#village-clock,.scenery-door,#postal-counter,#snow-playground,#surface-controls nav'
+      '.village-house,.wallpaper-cottage,#village-clock,.scenery-door,#postal-counter,#surface-controls button'
     )].map(node => node.getBoundingClientRect()).filter(rect => rect.width && rect.height);
     for (const rect of widgetFrames) {
       obstacles.push({left:rect.x*w,top:rect.y*h,right:(rect.x+rect.width)*w,bottom:(rect.y+rect.height)*h});
@@ -197,7 +191,7 @@
       totals = {shots:0,returns:0,dodges:0,player:0,flurry:0};
     }
     if (now - round.lastShot < 500) return;
-    learnedThrow = true; round.lastShot = now; totals.shots++; totals.player++;
+    round.lastShot = now; totals.shots++; totals.player++;
     ball(p,{x:round.rival.x,y:round.rival.y-.028});
     if (totals.player === 3) {
       label('You win!  3 · '+totals.flurry,round.rival,1550); dismissRound(true);
@@ -275,7 +269,7 @@
     held.node?.remove(); held = null; drawFriends(); tick();
   }
   const point = e => ({x:clamp(e.clientX/scene.clientWidth,0,1),y:clamp(e.clientY/scene.clientHeight,0,1)});
-  const control = 'button,a,input,select,textarea,[contenteditable=true],nav,dialog,#tools-panel,#snow-playground,#postal-counter,#porch-play,.door-actions';
+  const control = 'button,a,input,select,textarea,[contenteditable=true],nav,dialog,#tools-panel,#postal-counter,#porch-play,.door-actions';
   scene.addEventListener('pointerdown',e => {
     if (!e.isPrimary || e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.button !== 0) return;
     if (e.target.closest(control)) { if (round || held) clearPlay(); return; }
@@ -348,7 +342,6 @@
     if (!enabled() && (held || round)) clearPlay(); else publish();
   };
   new MutationObserver(checkMode).observe(scene,{attributes:true,attributeFilter:['class']});
-  new MutationObserver(checkMode).observe(meadow,{attributes:true,attributeFilter:['data-mode']});
   new MutationObserver(checkMode).observe(panel,{attributes:true,attributeFilter:['hidden']});
   window.FreeSnow = Object.freeze({state});
   drawFriends(); publish();

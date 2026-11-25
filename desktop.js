@@ -10,9 +10,9 @@
   let activeTool = null;
   let cleanupTool = null;
   let inYard = false;
-  let idleTimer;
 
   const paths = {
+    menu: '<path d="M4 6h16M4 12h16M4 18h16"/>',
     houses: '<path d="m2.5 10 9.5-7.5 9.5 7.5M5 8.6V21h14V8.6M9.2 21v-6.5a2.8 2.8 0 0 1 5.6 0V21"/>',
     snow: '<path d="M12 2v20M3.34 7l17.32 10M3.34 17 20.66 7M9 4l3 3 3-3m-6 16 3-3 3 3M3.8 10.5 8 9.7l-1-4m10 12.6-1-4 4.2-.8M7 18.3l1-4-4.2-.8m16.4-3L16 9.7l1-4"/>',
     sliders: '<path d="M3 6h3m6 0h9M3 17h11m6 0h1"/><circle cx="9" cy="6" r="3"/><circle cx="17" cy="17" r="3"/>',
@@ -67,20 +67,6 @@
   window.addEventListener('snow-settings',weather);
   reduceMotion.addEventListener('change',weather);
 
-  function wake() {
-    clearTimeout(idleTimer);
-    scene.classList.remove('quiet');
-    if (surface === 'wallpaper' || !panel.hidden || inYard) return;
-    idleTimer = setTimeout(() => {
-      const controls = $('#surface-controls');
-      if (!controls.contains(document.activeElement) && !controls.matches(':hover')) scene.classList.add('quiet');
-    },5500);
-  }
-  scene.addEventListener('pointermove',wake,{passive:true});
-  scene.addEventListener('pointerdown',wake,{passive:true});
-  scene.addEventListener('focusin',wake);
-  scene.addEventListener('pointerleave',wake);
-
   $('#demo-village').hidden = isMacApp;
   // Set hands on the clock face painted into the tower. Sleep between minute changes.
   const townClock = $('#village-clock');
@@ -130,9 +116,7 @@
     cleanup();
     panel.hidden = true;
     $('#tools').setAttribute('aria-expanded','false');
-    $('#houses').setAttribute('aria-expanded','false');
     if (restoreFocus) $('#tools').focus({preventScroll:true});
-    wake();
   }
   function showTools(kind = null,houseId = null) {
     if (surface === 'wallpaper') {
@@ -145,8 +129,8 @@
     cleanup();
     panel.hidden = false;
     panel.classList.toggle('opening',wasClosed);
-    $('#tools').setAttribute('aria-expanded',String(kind !== 'houses'));
-    $('#houses').setAttribute('aria-expanded',String(kind === 'houses'));
+    $('#tools').setAttribute('aria-expanded','true');
+    $('#village-actions').hidden = Boolean(kind);
     $('#panel-back').hidden = !kind;
     $('#panel-title').textContent = kind === 'houses' ? 'Folder houses' : kind ? tools[kind] : 'Cabin tools';
     const body = $('#panel-body');
@@ -215,9 +199,8 @@
         }
         body.append(rule,subtitle,group);
       }
-      list.querySelector('button').focus({preventScroll:true});
+      $('#houses').focus({preventScroll:true});
     }
-    wake();
   }
   function leaveYard() {
     if (!inYard) return;
@@ -226,7 +209,6 @@
     scene.classList.remove('yard-active');
     SnowPorches.invalidate();
     $('#back-to-desk').hidden = true;
-    wake();
   }
   function openYard(activity = 'build') {
     if (surface === 'wallpaper') {
@@ -246,7 +228,7 @@
   function finishYard() {
     leaveYard();
     if (isMacApp) bridge.postMessage('preview');
-    else $('#play').focus({preventScroll:true});
+    else $('#tools').focus({preventScroll:true});
   }
   function setSurface(next) {
     surface = next === 'wallpaper' ? 'wallpaper' : 'preview';
@@ -254,7 +236,6 @@
     closeTools();
     leaveYard();
     SnowYard.refresh?.();
-    wake();
   }
   function open(kind) {
     if (kind === 'yard') openYard();
@@ -270,7 +251,7 @@
     if (custom !== null && (typeof custom !== 'string' || !custom.startsWith('data:image/jpeg;base64,'))) return;
     const revision = ++imageRevision;
     const replacement = new Image();
-    replacement.src = custom || 'assets/scene.jpg?v=7.0.0';
+    replacement.src = custom || 'assets/scene.jpg?v=7.1.0';
     try {
       await replacement.decode();
       if (revision !== imageRevision) return;
@@ -320,25 +301,20 @@
       if (panel.hidden) showTools(); else closeTools(true);
     } else if (e.key === 'Escape') {
       SnowPorches.stop();
-      const fieldBack = scene.querySelector('#snow-playground:not([hidden]) button[data-action="back"]:not([hidden])');
-      if (fieldBack && panel.hidden) { e.preventDefault(); fieldBack.click(); }
-      else if (!panel.hidden) {
+      if (!panel.hidden) {
         e.preventDefault();
         if (isMacApp && scene.classList.contains('room-mode')) bridge.postMessage('preview');
         else if (activeTool) showTools(); else closeTools(true);
       }
       else if (inYard) { e.preventDefault(); finishYard(); }
       else if (isMacApp) bridge.postMessage('wallpaper');
-      else wake();
     }
   });
   const fullButton = $('#fullscreen');
   function labelFull(on) {
-    fullButton.title = on ? 'Exit full screen' : 'Enter full screen';
-    fullButton.setAttribute('aria-label',fullButton.title);
+    $('#fullscreen-label').textContent = on ? 'Exit full screen' : 'Enter full screen';
   }
   if (!isMacApp && !scene.requestFullscreen && !scene.webkitRequestFullscreen) {
-    fullButton.previousElementSibling.hidden = true;
     fullButton.hidden = true;
   }
   fullButton.addEventListener('click',async () => {

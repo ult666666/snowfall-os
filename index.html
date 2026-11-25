@@ -6,33 +6,31 @@
   <meta name="theme-color" content="#324b65">
   <meta name="description" content="An alpine winter wallpaper for Mac. Watch the snow fall, build a snowman, and send a little plow through fresh powder.">
   <title>Snowfall · Frostpine Hollow</title>
-  <link rel="icon" href="assets/cabin-icon.png?v=7.0.0">
-  <link rel="preload" as="image" href="assets/scene.jpg?v=7.0.0">
-  <link rel="stylesheet" href="desktop.css?v=7.0.0">
-  <link rel="stylesheet" href="apps.css?v=7.0.0">
-  <link rel="stylesheet" href="radio.css?v=7.0.0">
-  <link rel="stylesheet" href="yard.css?v=7.0.0">
-  <script defer src="apps.js?v=7.0.0"></script>
-  <script defer src="radio.js?v=7.0.0"></script>
-  <script defer src="yard.js?v=7.0.0"></script>
-  <link rel="stylesheet" href="rooms.css?v=7.0.0">
-  <link rel="stylesheet" href="post-office.css?v=7.0.0">
-  <script defer src="rooms.js?v=7.0.0"></script>
-  <script defer src="porch.js?v=7.0.0"></script>
-  <script defer src="widget-eaves.js?v=7.0.0"></script>
-  <script defer src="post-office.js?v=7.0.0"></script>
-  <script defer src="desktop.js?v=7.0.0"></script>
-  <link rel="stylesheet" href="snow-playground.css?v=7.0.0">
-  <script defer src="snow-playground.js?v=7.0.0"></script>
-  <link rel="stylesheet" href="free-snow.css?v=7.0.0">
-  <script defer src="free-snow.js?v=7.0.0"></script>
-  <link rel="stylesheet" href="village-life.css?v=7.0.0">
-  <script defer src="village-life.js?v=7.0.0"></script>
+  <link rel="icon" href="assets/cabin-icon.png?v=7.1.0">
+  <link rel="preload" as="image" href="assets/scene.jpg?v=7.1.0">
+  <link rel="stylesheet" href="desktop.css?v=7.1.0">
+  <link rel="stylesheet" href="apps.css?v=7.1.0">
+  <link rel="stylesheet" href="radio.css?v=7.1.0">
+  <link rel="stylesheet" href="yard.css?v=7.1.0">
+  <script defer src="apps.js?v=7.1.0"></script>
+  <script defer src="radio.js?v=7.1.0"></script>
+  <script defer src="yard.js?v=7.1.0"></script>
+  <link rel="stylesheet" href="rooms.css?v=7.1.0">
+  <link rel="stylesheet" href="post-office.css?v=7.1.0">
+  <script defer src="rooms.js?v=7.1.0"></script>
+  <script defer src="porch.js?v=7.1.0"></script>
+  <script defer src="widget-eaves.js?v=7.1.0"></script>
+  <script defer src="post-office.js?v=7.1.0"></script>
+  <script defer src="desktop.js?v=7.1.0"></script>
+  <link rel="stylesheet" href="free-snow.css?v=7.1.0">
+  <script defer src="free-snow.js?v=7.1.0"></script>
+  <link rel="stylesheet" href="village-life.css?v=7.1.0">
+  <script defer src="village-life.js?v=7.1.0"></script>
 </head>
 <body>
   <main id="scene" tabindex="0" aria-label="Frostpine Hollow winter landscape" aria-describedby="snow-gesture-help">
     <span class="sr-only" id="snow-gesture-help">Click open scenery to throw a snowball. Hold to build a snowman. With the landscape focused, use the arrow keys to move and tap or hold Space to play.</span>
-    <img id="wallpaper" src="assets/scene.jpg?v=7.0.0" draggable="false" alt="A winter valley at sunset. A postal house and clock tower overlook four winding streets, a frozen skating pond and a fox beside the creek.">
+    <img id="wallpaper" src="assets/scene.jpg?v=7.1.0" draggable="false" alt="A winter valley at sunset. A postal house and clock tower overlook four winding streets, a frozen skating pond and a fox beside the creek.">
     <div id="snow" aria-hidden="true"></div>
     <canvas id="widget-eaves" aria-hidden="true" width="1" height="1"></canvas>
     <div id="wallpaper-cottages" aria-hidden="true"></div>
@@ -48,18 +46,8 @@
     <div id="free-snow"></div>
     <div id="porch-play" hidden></div>
     <div id="yard-stage" aria-label="Snow yard"></div>
-    <section id="snow-playground" aria-label="Village snow playground"></section>
     <div id="surface-controls">
-      <div class="scene-caption">Frostpine Hollow</div>
-      <nav class="scene-controls glass" aria-label="Wallpaper controls">
-        <button id="houses" type="button" aria-expanded="false" aria-controls="tools-panel"><span data-icon="houses"></span>Houses</button>
-        <i aria-hidden="true"></i>
-        <button id="play" type="button"><span data-icon="snow"></span>Play in snow</button>
-        <i aria-hidden="true"></i>
-        <button id="tools" type="button" aria-expanded="false" aria-controls="tools-panel"><span data-icon="sliders"></span>Tools</button>
-        <i aria-hidden="true"></i>
-        <button id="fullscreen" type="button" class="icon-control" aria-label="Enter full screen" title="Enter full screen"><span data-icon="expand"></span></button>
-      </nav>
+      <button id="tools" type="button" class="village-menu" aria-label="Village menu" title="Village menu" aria-expanded="false" aria-controls="tools-panel"><span data-icon="menu"></span></button>
     </div>
     <button id="back-to-desk" type="button" class="glass done" hidden><span data-icon="check"></span>Done</button>
     <section id="tools-panel" class="glass" aria-labelledby="panel-title" hidden>
@@ -68,7 +56,14 @@
         <h1 id="panel-title">Cabin tools</h1>
         <button id="panel-close" type="button" class="icon-control" aria-label="Close cabin tools"><span data-icon="close"></span></button>
       </header>
-      <div id="panel-body"></div>
+      <div id="menu-scroll">
+        <nav id="village-actions" class="tool-list" aria-label="Village activities">
+          <button id="houses" type="button" class="tool-row"><span data-icon="houses"></span>Folder houses</button>
+          <button id="play" type="button" class="tool-row"><span data-icon="snow"></span>Snow Yard</button>
+          <button id="fullscreen" type="button" class="tool-row"><span data-icon="expand"></span><span id="fullscreen-label">Enter full screen</span></button>
+        </nav>
+        <div id="panel-body"></div>
+      </div>
     </section>
     <p class="sr-only" role="status" id="status"></p>
   </main>

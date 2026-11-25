@@ -86,3 +86,6 @@
   .yard-snowman { width: 58px; }
   .yard-mitten { width: 36px; }
 }
+
+/* Dormant Snow Yard pieces stay inside the yard. The open desktop uses its planted snowmen. */
+.snow-yard:not(.yard-open):not([data-ambient-running="roll"]):not([data-ambient-running="plow"]) { visibility:hidden; }

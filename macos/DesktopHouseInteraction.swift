@@ -258,7 +258,7 @@ import Carbon
 
     /// An opt-in command-line check of the running wallpaper. No coordinates,
     /// house IDs, names, interaction times, or counters are written to disk.
-    static func printSessionStatus(hitPoint: Bool = false, office: Bool = false, playground: String? = nil, ground: CGPoint? = nil) -> Int32 {
+    static func printSessionStatus(hitPoint: Bool = false, office: Bool = false, ground: CGPoint? = nil) -> Int32 {
         let bus = DistributedNotificationCenter.default(), id = UUID().uuidString
         var answer: String?
         let observer = bus.addObserver(forName: statusReply, object: id, queue: .main) { note in
@@ -266,8 +266,7 @@ import Carbon
             let keys = hitPoint ? ["x","y","window","exposed","passiveExposed"] :
                 ["observing","animatedClicks","located","nativeTargets","localClicks","finderDrawing","feedbackVisible",
                  "composedFolders","unplacedFolders","widgets","files","letterTargets","civicTargets","deskVisible",
-                 "playgroundTargets","playgroundInputs","playgroundStage","playgroundThrows","playgroundDodges","playgroundPasses",
-                 "playgroundMode","playgroundIncoming","groundObserving","groundFinderMapped","groundPassiveInputs","groundInputs","groundActive","groundSnowmen","groundFight","groundShots","groundReturns"]
+                 "playgroundTargets","groundObserving","groundFinderMapped","groundPassiveInputs","groundInputs","groundActive","groundSnowmen","groundFight","groundShots","groundReturns"]
             var filtered: [String: NSNumber] = [:]
             for name in keys { if let value = info[name] as? NSNumber { filtered[name] = value } }
             if !filtered.isEmpty, let bytes = try? JSONSerialization.data(withJSONObject:filtered,options:[.sortedKeys]) {
@@ -276,7 +275,6 @@ import Carbon
         }
         defer { bus.removeObserver(observer) }
         var request: [String:Any] = ["hitPoint":hitPoint,"office":office]
-        if let playground { request["playground"] = playground }
         if let ground { request["groundX"] = ground.x; request["groundY"] = ground.y }
         bus.postNotificationName(statusRequest, object:id, userInfo:request, deliverImmediately:true)
         let end = Date(timeIntervalSinceNow: 2)
