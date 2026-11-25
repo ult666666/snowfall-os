@@ -1,0 +1,81 @@
+/* Window content only. The desktop owns the frame, title bar and placement. */
+.snow-app {
+  --sa-ink: #f3e8ec;
+  --sa-soft: #d0bed8;
+  --sa-line: #756781;
+  --sa-inset: #282338;
+  --sa-peach: #ffd3b0;
+  box-sizing: border-box;
+  width: 100%;
+  padding: clamp(14px, 3vw, 22px);
+  background: #352d43;
+  color: var(--sa-ink);
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.45;
+  text-align: left;
+  color-scheme: dark;
+}
+.snow-app *, .snow-app *::before, .snow-app *::after { box-sizing: border-box; }
+.snow-app h3, .snow-app p { margin: 0; }
+.snow-app h3 { color: var(--sa-peach); font-size: 1.35rem; line-height: 1.17; }
+.snow-app button, .snow-app textarea { font: inherit; }
+.snow-app button {
+  appearance: none;
+  border: 1px solid var(--sa-line);
+  border-radius: 5px;
+  padding: 8px 12px;
+  background: #44394f;
+  color: var(--sa-ink);
+  cursor: pointer;
+  text-align: center;
+}
+.snow-app button:hover:enabled { background: #57485f; border-color: #c3abc9; }
+.snow-app button:disabled { cursor: default; opacity: .5; }
+.snow-app :focus-visible { outline: 2px solid #ffdaab; outline-offset: 2px; }
+.snow-app h3:focus { outline: none; }
+.snow-app .sa-primary { background: var(--sa-peach); color: #352a37; border-color: var(--sa-peach); font-weight: 700; }
+.snow-app .sa-primary:hover:enabled { background: #ffe4c9; color: #2c2031; }
+.sa-meta { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 10px; color: var(--sa-soft); font-size: 12px; }
+.sa-editor { display: grid; gap: 10px; font-weight: 650; color: var(--sa-peach); }
+.sa-editor textarea {
+  width: 100%; min-height: 96px; max-height: 42vh;
+  resize: vertical; padding: 10px 12px; background: var(--sa-inset); color: var(--sa-ink);
+  border: 1px solid var(--sa-line); border-radius: 5px; font-weight: 400; line-height: 1.6;
+}
+.sa-editor textarea::placeholder { color: #b6a5c0; }
+.sa-notes .sa-meta { margin-top: 9px; }
+.sa-segment { display: flex; gap: 3px; padding: 3px; background: var(--sa-inset); border: 1px solid var(--sa-line); border-radius: 6px; }
+.sa-segment button { flex: 1; border: 1px solid transparent; background: transparent; padding: 6px; font-size: 14px; }
+.snow-app button[aria-pressed="true"] { background: #67516d; border-color: #b59abb; color: #fff3e6; }
+.sa-face { margin: 12px 0 16px; text-align: center; }
+.sa-time { color: var(--sa-peach); font: 650 clamp(40px, 10vw, 60px)/1.4 ui-monospace, monospace; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+.sa-timer-caption { color: var(--sa-soft); font-size: 13px; }
+.sa-actions { display: flex; justify-content: space-between; gap: 8px; }
+.sa-focus .sa-actions button { flex: 1; }
+.sa-guide { display: grid; gap: 10px; }
+.sa-lesson-step { font-size: 12px; color: #cdb6db; letter-spacing: .065em; text-transform: uppercase; }
+.sa-guide .sa-question { margin-top: 4px; font-weight: 650; }
+.sa-choices { display: grid; gap: 6px; }
+.sa-choices .sa-choice { text-align: left; line-height: 1.35; }
+.sa-guide .sa-feedback { color: #ffd8bc; font-size: 14px; padding-left: 10px; border-left: 2px solid currentColor; }
+.sa-guide .sa-feedback:empty { display: none; }
+.sa-guide .sa-correct { color: #c6e1c2; }
+.sa-guide .sa-actions { margin-top: 5px; }
+.sa-guide > .sa-primary { justify-self: start; }
+.sa-field { min-width: 0; padding: 0; margin: 0; border: 0; }
+.sa-field legend { margin-bottom: 9px; padding: 0; font-weight: 650; color: var(--sa-peach); }
+.sa-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 0; margin: 14px 0 0; border-top: 1px solid var(--sa-line); cursor: pointer; }
+.sa-switch-row small { display: block; margin-top: 2px; color: var(--sa-soft); font-size: 13px; }
+.sa-switch-row input {
+  flex: 0 0 auto; appearance: none; width: 40px; height: 23px; margin: 0;
+  padding: 3px; border: 1px solid var(--sa-line); border-radius: 20px; background: var(--sa-inset); cursor: pointer;
+}
+.sa-switch-row input::before { display: block; content: ''; width: 15px; height: 15px; background: #e6d5eb; border-radius: 50%; }
+.sa-switch-row input:checked { background: #806988; }
+.sa-switch-row input:checked::before { transform: translateX(17px); background: #fff2db; }
+@media (forced-colors: active) {
+  .sa-switch-row input { appearance: auto; }
+  .sa-switch-row input::before { display: none; }
+  .snow-app button[aria-pressed="true"] { outline: 2px solid Highlight; }
+}
