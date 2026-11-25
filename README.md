@@ -1,41 +1,44 @@
 # Snowfall OS
 
-An animated winter wallpaper for your Mac. Snow falls around a warmly lit cabin while your Finder icons, widgets, and open apps stay clickable. The snowflake in the menu bar lets you roll a snowball or send the plow across your desktop.
+A storybook winter village for your Mac. Finder folders become little cottages on the snow. Each cottage has a notebook, a focus timer, a radio, and an interactive field guide. A fox watches from the bridge while Flurry and the snowplow play in the clearing.
 
-## Open the cabin
+![The illustrated village with sample cottage folders and a framed clock](docs/desktop-preview.jpg)
 
-On macOS 12 or later, download **Snowfall-OS-macOS.zip**, unzip it, and open **Snowfall OS.app**. The wallpaper appears on every attached screen. Quit from the snowflake menu to return to your original wallpaper. [Download for Mac](https://github.com/ult666666/snowfall-os/releases/latest)
+[Download for Mac](https://github.com/ult666666/snowfall-os/releases/latest/download/Snowfall-OS-macOS.zip) · [Explore the village in your browser](https://ult666666.github.io/snowfall-os/?v=3)
 
-![Winter cabin and snow-covered trees in Snowfall OS](docs/desktop-preview.jpg)
+## Move into the village
 
-The browser preview lets you play in the snow yard and try the cabin tools. The Mac download adds the live wallpaper, menu bar controls, window-edge snow, and shortcuts to installed apps. [Play in your browser](https://ult666666.github.io/snowfall-os/)
+On macOS 12 or later, unzip the download and open **Snowfall OS.app**. The snowflake in the menu bar controls the live scene. The app is built for Apple silicon and Intel. Its public binary has an ad-hoc signature and has not been notarized by Apple.
 
-### From the snowflake menu
+1. In **Folder Houses**, choose **Style Desktop Folders as Houses** to give your immediate Desktop folders painted cottage icons. Double-click a cottage to open its files as usual. New eligible Desktop folders receive houses while styling is enabled.
+2. Right-click a cottage in Finder and choose **Services → Open House Widgets**. You can also choose **Folder Houses → Open a House…** from the snowflake menu. A notebook and timer belong to that folder even after a rename. Radio and snow settings are shared.
+3. Enable **Frame Desktop Widgets** for painted eaves around visible system widgets that macOS exposes on the desktop. macOS keeps drawing the original widget and handling its clicks. Widget contents and folder names stay on the Mac.
+4. In **Wallpaper Image**, choose **Set Village as Mac Wallpaper** to keep the painted scene as your desktop picture after the app quits. The live effects run while Snowfall is open.
 
-- **Roll a Snowball** or **Send the Snowplow** to see the action travel across the wallpaper, behind your regular windows.
-- **Wallpaper Image → Choose Image…** lets you use a picture from your Mac. Choose **Alpine Cabin** to return to the included scene.
-- **Snow on App Windows** adds a dusting along the tops of visible app windows. The effect uses their positions and sizes, lets clicks pass through, and respects the system’s Reduce Motion setting.
-- **Play in Snow** opens a resizable game window. Stack three snowballs to build Flurry, then challenge him. Click him to throw, and use the arrows to dodge the marked landing spot. First to three hits wins. In the plow activity, choose a snow pile to clear it and watch the tracks appear.
-- **Tools** opens an offline radio, notes, a 25-minute focus timer with five-minute breaks, and a field guide with three short AI product lessons. The menu also offers shortcuts to Apple’s Music, Notes, and Clock apps when installed.
+**To undo the desktop changes**, use **Folder Houses → Restore Original Folder Icons** and **Wallpaper Image → Restore Previous Mac Wallpaper and Quit**. Snowfall saves the original icon state before styling. It skips apps, packages, aliases, and hidden items.
 
-![Flurry standing in the clearing after three rolls](docs/snow-yard.jpg)
+![A sample folder cottage showing the widgets available inside](docs/house-room.jpg)
 
-The cabin saves your snowman, notes, timer state, radio favorites, and settings locally. The Mac app and browser preview each keep their own saved data.
+## Snow play
 
-### Build from source
+Choose **Roll a Snowball** three times to build Flurry directly on your wallpaper. Another roll prompts a return toss. **Send the Snowplow** pushes the next pile into a snowbank. For a full game, choose **Play in Snow**, challenge Flurry, and dodge with the arrow keys. The first to land three hits wins.
 
-Install Apple’s Command Line Tools, then run these commands in the project folder. The script produces a universal app for Apple silicon and Intel.
+The browser preview uses fictional sample folders. It runs the same widget and game code and stores sample notes locally. Finder integration, desktop widget frames, and system wallpaper changes are available in the Mac app.
+
+## Build on your Mac
+
+Install Apple’s Command Line Tools, then run these commands from the project folder.
 
 ```sh
 ./build-mac.sh
 open "build/Snowfall OS.app"
 ```
 
-The release uses an ad-hoc code signature and has no Apple notarization. If macOS blocks the downloaded copy, you can build it locally from the same source. [Build script](build-mac.sh)
+The bundled app works offline. To run its isolated integration check, execute `"build/Snowfall OS.app/Contents/MacOS/SnowfallOS" --smoke-test`. It exercises folder styling and restoration using temporary folders.
 
 ## Learn how an AI product takes shape
 
-The alpine landscape was generated with AI during development. The plow, snowballs, and snowman are rendered 3D miniatures with transparent backgrounds. Cabin Radio uses crops of that scenery for its sleeves. Each of its three original scores plays locally through Web Audio. Hand-coded rules decide where Flurry aims and which snow pile the plow clears. The bundled app works offline with zero model calls. [Game rules](yard.js) · [Radio scores and synthesis](radio.js)
+The village wallpaper, painted widget frame, and six cottage illustrations were generated with AI during development. The plow, snowballs, and snowman are rendered 3D miniatures with transparent backgrounds. Cabin Radio uses crops of that scenery for its sleeves. Each of its three original scores plays locally through Web Audio. Hand-coded rules decide where Flurry aims and which snow pile the plow clears. The bundled app works offline with zero model calls. [Game rules](yard.js) · [Radio scores and synthesis](radio.js)
 
 **Try a design exercise.** A visitor writes “I have half an hour to finish my sketch” but doesn’t know which tool to open. How could a future guide help?
 

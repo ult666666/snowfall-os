@@ -6,25 +6,37 @@
   <meta name="theme-color" content="#324b65">
   <meta name="description" content="An alpine winter wallpaper for Mac. Watch the snow fall, build a snowman, and send a little plow through fresh powder.">
   <title>Snowfall · Frostpine Hollow</title>
-  <link rel="icon" href="assets/cabin-icon.png">
-  <link rel="preload" as="image" href="assets/scene.jpg">
-  <link rel="stylesheet" href="desktop.css?v=2">
-  <link rel="stylesheet" href="apps.css?v=2">
-  <link rel="stylesheet" href="radio.css?v=2">
-  <link rel="stylesheet" href="yard.css?v=2">
-  <script defer src="apps.js?v=2"></script>
-  <script defer src="radio.js?v=2"></script>
-  <script defer src="yard.js?v=2"></script>
-  <script defer src="desktop.js?v=2"></script>
+  <link rel="icon" href="assets/cabin-icon.png?v=3">
+  <link rel="preload" as="image" href="assets/scene.jpg?v=3">
+  <link rel="stylesheet" href="desktop.css?v=3">
+  <link rel="stylesheet" href="apps.css?v=3">
+  <link rel="stylesheet" href="radio.css?v=3">
+  <link rel="stylesheet" href="yard.css?v=3">
+  <script defer src="apps.js?v=3"></script>
+  <script defer src="radio.js?v=3"></script>
+  <script defer src="yard.js?v=3"></script>
+  <link rel="stylesheet" href="rooms.css?v=3">
+  <script defer src="rooms.js?v=3"></script>
+  <script defer src="widget-eaves.js?v=3"></script>
+  <script defer src="desktop.js?v=3"></script>
 </head>
 <body>
   <main id="scene" aria-label="Frostpine Hollow winter landscape">
-    <img id="wallpaper" src="assets/scene.jpg" draggable="false" alt="Evening light on a snowy alpine valley. A timber cabin glows above a quiet lake.">
+    <img id="wallpaper" src="assets/scene.jpg?v=3" draggable="false" alt="A painted winter village with snow-capped cottages, a little bakery, and a fox beside a wooden bridge.">
     <div id="snow" aria-hidden="true"></div>
+    <canvas id="widget-eaves" aria-hidden="true" width="1" height="1"></canvas>
+    <div id="demo-village" aria-label="Sample folder cottages">
+      <button type="button" class="village-house sketchbook" data-sample="sample-sketchbook" aria-label="Open the Sketchbook house"><img src="assets/houses/cottage-1.png" alt=""><span>Sketchbook</span></button>
+      <button type="button" class="village-house studio" data-sample="sample-studio" aria-label="Open the Studio house"><img src="assets/houses/cottage-3.png" alt=""><span>Studio</span></button>
+      <button type="button" class="village-house library" data-sample="sample-library" aria-label="Open the Library house"><img src="assets/houses/cottage-5.png" alt=""><span>Library</span></button>
+      <button type="button" id="village-clock" title="Switch clock format" aria-label="Switch clock format"><span id="village-day"></span><time id="village-time"></time></button>
+    </div>
     <div id="yard-stage" aria-label="Snow yard"></div>
     <div id="surface-controls">
       <div class="scene-caption">Frostpine Hollow</div>
       <nav class="scene-controls glass" aria-label="Wallpaper controls">
+        <button id="houses" type="button" aria-expanded="false" aria-controls="tools-panel"><span data-icon="houses"></span>Houses</button>
+        <i aria-hidden="true"></i>
         <button id="play" type="button"><span data-icon="snow"></span>Play in snow</button>
         <i aria-hidden="true"></i>
         <button id="tools" type="button" aria-expanded="false" aria-controls="tools-panel"><span data-icon="sliders"></span>Tools</button>

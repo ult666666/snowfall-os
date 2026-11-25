@@ -16,15 +16,33 @@
   }
 
   function save(key, value) {
+    let persisted = true;
     try {
       window.localStorage.setItem(prefix + key, JSON.stringify(value));
       memory.delete(key);
-      return true;
     } catch {
       memory.set(key, value);
-      return false;
+      persisted = false;
     }
+    window.dispatchEvent(new CustomEvent('snow-app-change', {detail:key}));
+    return persisted;
   }
+
+  function watch(key, callback) {
+    const local = event => { if (event.detail === key) callback(); };
+    const remote = event => {
+      if (event.key !== prefix + key && event.key !== null) return;
+      memory.delete(key);
+      callback();
+    };
+    window.addEventListener('snow-app-change',local);
+    window.addEventListener('storage',remote);
+    return () => {
+      window.removeEventListener('snow-app-change',local);
+      window.removeEventListener('storage',remote);
+    };
+  }
+
 
   function button(text, className = '') {
     const element = document.createElement('button');
@@ -51,14 +69,15 @@
     if (event.key === prefix + 'settings' || event.key === null) broadcastSettings();
   });
 
-  function renderNotes(root) {
+  function renderNotes(root, scope) {
+    const key = scope + 'notes';
     root.innerHTML = `<label class="sa-editor"><span>My cabin notes</span>
       <textarea placeholder="Catch a thought before it drifts away…" spellcheck="true" rows="7"></textarea></label>
       <div class="sa-meta"><span class="sa-save" role="status"></span><span class="sa-count"></span></div>`;
     const editor = root.querySelector('textarea');
     const status = root.querySelector('.sa-save');
     const count = root.querySelector('.sa-count');
-    const saved = load('notes', '');
+    const saved = load(key, '');
     editor.value = typeof saved === 'string' ? saved : '';
     function update() {
       const words = editor.value.trim().split(/\s+/u).filter(Boolean).length;
@@ -67,21 +86,19 @@
     status.textContent = 'Stored on this device';
     update();
     editor.addEventListener('input', () => {
-      const storageWorks = save('notes', editor.value);
+      const storageWorks = save(key, editor.value);
       status.textContent = storageWorks ? 'Saved on this device' : 'Kept for this session';
       update();
     });
-    function sync(event) {
-      if (event.key !== prefix + 'notes' && event.key !== null) return;
-      const next = load('notes', '');
+    function sync() {
+      const next = load(key, '');
       if (typeof next === 'string' && editor.value !== next) {
         editor.value = next;
         status.textContent = 'Updated on this device';
         update();
       }
     }
-    window.addEventListener('storage', sync);
-    return () => window.removeEventListener('storage', sync);
+    return watch(key,sync);
   }
 
   const durations = { focus: 25 * 60, break: 5 * 60 };
@@ -90,8 +107,8 @@
     return { mode, remaining: durations[mode], endsAt: null };
   }
 
-  function readTimer() {
-    const timer = load('timer', null);
+  function readTimer(key) {
+    const timer = load(key, null);
     if (!timer || !Object.prototype.hasOwnProperty.call(durations, timer.mode) || !Number.isFinite(timer.remaining)
       || timer.remaining < 0 || timer.remaining > durations[timer.mode]
       || (timer.endsAt !== null && !Number.isFinite(timer.endsAt))) return freshTimer();
@@ -103,12 +120,13 @@
     return Math.max(0, Math.ceil((timer.endsAt - Date.now()) / 1000));
   }
 
-  function renderFocus(root) {
+  function renderFocus(root, scope) {
+    const key = scope + 'timer';
     root.innerHTML = `<div class="sa-segment" role="group" aria-label="Timer length">
         <button type="button" data-mode="focus">Focus · 25 min</button><button type="button" data-mode="break">Break · 5 min</button>
       </div><div class="sa-face"><div role="timer" aria-label="Time remaining" class="sa-time"></div><p class="sa-timer-caption" role="status"></p></div>
       <div class="sa-actions"><button type="button" class="sa-primary sa-start"></button><button type="button" class="sa-reset">Reset</button></div>`;
-    let timer = readTimer();
+    let timer = readTimer(key);
     const tabs = root.querySelectorAll('[data-mode]');
     const time = root.querySelector('.sa-time');
     const caption = root.querySelector('.sa-timer-caption');
@@ -118,8 +136,10 @@
     function draw() {
       const remaining = secondsLeft(timer);
       if (remaining === 0 && timer.endsAt !== null) {
+        const current = readTimer(key);
+        if (current.endsAt !== timer.endsAt) { timer = current; draw(); return; }
         timer = { ...timer, remaining: 0, endsAt: null };
-        save('timer', timer);
+        save(key, timer);
       }
       const running = timer.endsAt !== null;
       const modeName = timer.mode === 'break' ? 'break' : 'focus session';
@@ -132,7 +152,7 @@
       tabs.forEach(tab => tab.setAttribute('aria-pressed', String(tab.dataset.mode === timer.mode)));
     }
     function persist() {
-      save('timer', timer);
+      save(key, timer);
       draw();
     }
     tabs.forEach(tab => tab.addEventListener('click', () => {
@@ -148,13 +168,10 @@
       persist();
     });
     reset.addEventListener('click', () => { timer = freshTimer(timer.mode); persist(); });
-    function sync(event) {
-      if (event.key === prefix + 'timer' || event.key === null) { timer = readTimer(); draw(); }
-    }
     draw();
     const ticker = window.setInterval(draw, 400);
-    window.addEventListener('storage', sync);
-    return () => { window.clearInterval(ticker); window.removeEventListener('storage', sync); };
+    const stopWatching = watch(key,() => { timer = readTimer(key); draw(); });
+    return () => { window.clearInterval(ticker); stopWatching(); };
   }
 
   const lessons = [
@@ -251,13 +268,14 @@
 
   const views = { notes: renderNotes, focus: renderFocus, guide: renderGuide, settings: renderSettings };
   const mounts = new WeakMap();
-  function open(kind, container) {
+  function open(kind, container, options = {}) {
     if (!Object.prototype.hasOwnProperty.call(views, kind)) throw new RangeError(`Unknown cabin app: ${kind}`);
     mounts.get(container)?.();
     const root = document.createElement('section');
     root.className = `snow-app sa-${kind}`;
     container.replaceChildren(root);
-    const unmount = views[kind](root);
+    const scope = typeof options.houseId === 'string' && options.houseId ? 'house.' + JSON.stringify(options.houseId) + '.' : '';
+    const unmount = views[kind](root,scope);
     const cleanup = () => {
       if (mounts.get(container) !== cleanup) return;
       unmount();

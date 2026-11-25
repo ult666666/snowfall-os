@@ -13,6 +13,7 @@
   let idleTimer;
 
   const paths = {
+    houses: '<path d="m2.5 10 9.5-7.5 9.5 7.5M5 8.6V21h14V8.6M9.2 21v-6.5a2.8 2.8 0 0 1 5.6 0V21"/>',
     snow: '<path d="M12 2v20M3.34 7l17.32 10M3.34 17 20.66 7M9 4l3 3 3-3m-6 16 3-3 3 3M3.8 10.5 8 9.7l-1-4m10 12.6-1-4 4.2-.8M7 18.3l1-4-4.2-.8m16.4-3L16 9.7l1-4"/>',
     sliders: '<path d="M3 6h3m6 0h9M3 17h11m6 0h1"/><circle cx="9" cy="6" r="3"/><circle cx="17" cy="17" r="3"/>',
     expand: '<path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/>',
@@ -36,6 +37,9 @@
     return span;
   }
   for (const slot of document.querySelectorAll('[data-icon]')) slot.replaceWith(icon(slot.dataset.icon));
+  panel.addEventListener('animationend',event => {
+    if (event.target === panel && event.animationName === 'panel-in') panel.classList.remove('opening');
+  });
   const tools = {
     radio:'Cabin Radio', notes:'Notebook', focus:'Focus timer', guide:'AI field guide', settings:'Snowfall settings'
   };
@@ -77,22 +81,47 @@
   scene.addEventListener('focusin',wake);
   scene.addEventListener('pointerleave',wake);
 
+  $('#demo-village').hidden = isMacApp;
+  if (!isMacApp) {
+    let twentyFour = false;
+    try { twentyFour = localStorage.getItem('snowfall-os.clock24') === '1'; } catch {}
+    const updateClock = () => {
+      const now = new Date();
+      $('#village-day').textContent = now.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+      $('#village-time').textContent = now.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',hour12:!twentyFour});
+      $('#village-time').dateTime = now.toISOString();
+    };
+    $('#village-clock').addEventListener('click',() => {
+      twentyFour = !twentyFour;
+      try { localStorage.setItem('snowfall-os.clock24',twentyFour ? '1' : '0'); } catch {}
+      updateClock();
+    });
+    updateClock();
+    setInterval(updateClock,15000);
+    for(const button of document.querySelectorAll('[data-sample]')) {
+      button.addEventListener('click',() => showTools('houses',button.dataset.sample));
+    }
+  }
+
   function cleanup() {
     if (cleanupTool) cleanupTool();
     cleanupTool = null;
     activeTool = null;
+    scene.classList.remove('room-mode');
+    delete panel.dataset.content;
     $('#panel-body').replaceChildren();
   }
   function closeTools(restoreFocus = false) {
     cleanup();
     panel.hidden = true;
     $('#tools').setAttribute('aria-expanded','false');
+    $('#houses').setAttribute('aria-expanded','false');
     if (restoreFocus) $('#tools').focus({preventScroll:true});
     wake();
   }
-  function showTools(kind = null) {
+  function showTools(kind = null,houseId = null) {
     if (surface === 'wallpaper') {
-      if (isMacApp) bridge.postMessage('tools');
+      if (isMacApp) bridge.postMessage(kind === 'houses' ? 'houseWidgets' : 'tools');
       return;
     }
     if (inYard) leaveYard();
@@ -100,11 +129,19 @@
     cleanup();
     panel.hidden = false;
     panel.classList.toggle('opening',wasClosed);
-    $('#tools').setAttribute('aria-expanded','true');
+    $('#tools').setAttribute('aria-expanded',String(kind !== 'houses'));
+    $('#houses').setAttribute('aria-expanded',String(kind === 'houses'));
     $('#panel-back').hidden = !kind;
-    $('#panel-title').textContent = kind ? tools[kind] : 'Cabin tools';
+    $('#panel-title').textContent = kind === 'houses' ? 'Folder houses' : kind ? tools[kind] : 'Cabin tools';
     const body = $('#panel-body');
-    if (kind) {
+    if (kind === 'houses') {
+      activeTool = kind;
+      panel.dataset.content = 'houses';
+      scene.classList.toggle('room-mode',isMacApp);
+      $('#panel-back').hidden = true;
+      cleanupTool = SnowRooms.mount(body,{native:isMacApp,bridge:command=>bridge?.postMessage(command),houseId});
+      if (!isMacApp && !houseId) body.querySelector('button')?.focus({preventScroll:true});
+    } else if (kind) {
       activeTool = kind;
       cleanupTool = kind === 'radio' ? CabinRadio.mount(body) : SnowApps.open(kind,body);
       $('#panel-back').focus({preventScroll:true});
@@ -180,6 +217,7 @@
   function open(kind) {
     if (kind === 'yard') openYard();
     else if (kind === 'tools') showTools();
+    else if (kind === 'houses') showTools('houses');
     else if (Object.prototype.hasOwnProperty.call(tools,kind)) showTools(kind);
   }
   window.SnowYard.init($('#yard-stage'),openYard);
@@ -205,6 +243,11 @@
   });
   window.addEventListener('snowfall-surface',e => setSurface(e.detail));
   window.addEventListener('snowfall-open',e => open(e.detail));
+  window.addEventListener('snowfall-house',e => {
+    if (!isMacApp || activeTool === 'houses') return;
+    const id=typeof e.detail === 'string' ? e.detail : e.detail?.id;
+    if(id) showTools('houses',id);
+  });
   window.addEventListener('snowfall-action',e => {
     if (surface === 'wallpaper' && (e.detail === 'roll' || e.detail === 'plow')) SnowYard.ambient?.(e.detail);
   });
@@ -212,10 +255,18 @@
   document.addEventListener('visibilitychange',() => {
     if (!document.hidden) SnowYard.refresh?.();
   });
+  $('#houses').addEventListener('click',() => {
+    if (isMacApp) bridge.postMessage('houseWidgets');
+    else if (activeTool === 'houses') closeTools(true);
+    else showTools('houses');
+  });
   $('#tools').addEventListener('click',() => panel.hidden ? showTools() : closeTools(true));
   $('#play').addEventListener('click',() => openYard());
   $('#back-to-desk').addEventListener('click',finishYard);
-  $('#panel-close').addEventListener('click',() => closeTools(true));
+  $('#panel-close').addEventListener('click',() => {
+    if(isMacApp && activeTool === 'houses') bridge.postMessage('wallpaper');
+    else closeTools(true);
+  });
   $('#panel-back').addEventListener('click',() => showTools());
   scene.addEventListener('pointerdown',e => {
     if (!panel.hidden && !panel.contains(e.target) && !e.target.closest('#surface-controls')) closeTools();

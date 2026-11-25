@@ -107,3 +107,58 @@ html[data-surface="wallpaper"] #scene { pointer-events: none; }
   #tools-panel.opening { animation: none; }
   .done { top: 10px; right: 10px; }
 }
+
+/* Finder supplies the real houses on Mac. The public preview has three playable examples. */
+#widget-eaves, #demo-village { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+#widget-eaves { z-index:0; }
+#demo-village { z-index:2; }
+html[data-surface="wallpaper"] #demo-village, .yard-active #demo-village { display:none; }
+.village-house {
+  position:absolute; display:flex; flex-direction:column; align-items:center; padding:0; border:0;
+  background:none; color:#493b30; transform:translate(-50%,-100%); pointer-events:auto;
+  font:600 12px/1.25 ui-rounded,"Avenir Next",system-ui,sans-serif;
+}
+.village-house img { display:block; width:100%; height:auto; transition:transform .19s ease-out,filter .19s ease-out; transform-origin:50% 91%; }
+.village-house:hover img, .village-house:focus-visible img { transform:translateY(-2px) scale(1.045); filter:brightness(1.06); }
+.village-house:active img { transform:scale(.99); }
+.village-house span {
+  margin-top:-4px; padding:2px 8px 3px; border-radius:4px 5px 4px 5px; background:linear-gradient(178deg,#f5dab0,#dcb78a);
+  border:1px solid #a28263; box-shadow:0 2px 3px #59637d35,inset 0 1px 0 #ffead0;
+  text-shadow:0 1px 0 #fff0d180;
+}
+.village-house.sketchbook { left:64%; top:43%; width:clamp(78px,8.3vw,145px); }
+.village-house.studio { left:83%; top:65%; width:clamp(94px,9.7vw,170px); }
+.village-house.library { left:59%; top:84%; width:clamp(103px,11vw,187px); }
+#village-clock {
+  position:absolute; right:6.5%; top:12%; width:clamp(116px,11vw,170px); min-height:64px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+  border:0; border-radius:2px; padding:7px 8px 8px; pointer-events:auto;
+  color:#4a4a38; background:radial-gradient(ellipse at 28% 24%,#fff2cf,#f0dcb9 83%); box-shadow:inset 0 0 0 2px #fff2d6;
+  font-family:ui-rounded,"Avenir Next",system-ui,sans-serif;
+}
+#village-day { font-size:10px; font-weight:650; letter-spacing:.02em; color:#796749; }
+#village-time { font:650 clamp(18px,1.8vw,26px)/1.18 ui-rounded,"Avenir Next",system-ui,sans-serif; letter-spacing:-.045em; font-variant-numeric:tabular-nums; }
+.scene-controls { background:linear-gradient(150deg,#4c5b4ce8,#3c4e44e6); border-color:#e2d7ba94; }
+.scene-caption { color:#fff9ec; text-shadow:0 1px 5px #374438,0 0 12px #37443870; }
+.scene-controls button:focus-visible,.village-house:focus-visible,#village-clock:focus-visible { outline-color:#314e3f; }
+#tools-panel[data-content="houses"] { width:min(377px,calc(100% - 28px)); color:#34493a; border:1px solid #c8bfa3; background:#f8f3e4; }
+#tools-panel[data-content="houses"] .panel-head { padding:8px 11px 6px 17px; background:#eee7d5; border-bottom:1px solid #ddd6c4; }
+#tools-panel[data-content="houses"] .panel-head h1 { font-size:13px; font-weight:590; letter-spacing:.005em; }
+#tools-panel[data-content="houses"] .panel-head button { color:#415644; }
+#tools-panel[data-content="houses"] .panel-head button:hover { background:#dcd7c6; }
+.room-mode #surface-controls, .room-mode #demo-village { display:none; }
+.room-mode #tools-panel[data-content="houses"] { inset:0; width:100%; height:100%; max-height:none; transform:none; border:0; border-radius:0; box-shadow:none; }
+.room-mode #panel-body { background:linear-gradient(#fbf8ed,#f4efde); flex:1; }
+.room-mode .rooms-root { max-width:none; min-height:100%; }
+.room-mode #tools-panel[data-content="houses"] .panel-head { display:none; }
+@media(max-width:580px) {
+  #wallpaper { object-position:49% center; }
+  .village-house.sketchbook { left:66%; top:40%; width:76px; }
+  .village-house.studio { left:83%; top:62%; width:89px; }
+  .village-house.library { left:52%; top:83%; width:101px; }
+  .village-house span { font-size:10px; padding:1px 5px 2px; }
+  #village-clock { top:9%; right:5%; min-height:46px; width:96px; padding:5px; }
+  #village-day { font-size:9px; }
+  .scene-controls button { font-size:12px; padding-inline:8px; gap:4px; }
+  .scene-controls [data-icon] svg { width:15px; }
+}

@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 private let appName = "Snowfall OS"
 private let smokeTest = CommandLine.arguments.contains("--smoke-test")
 private let snowPreference = "SnowOnAppWindows"
+private let framesPreference = "FrameDesktopWidgets"
 
 private final class WallpaperWindow: NSWindow {
     override var canBecomeKey: Bool { false }
@@ -12,10 +13,10 @@ private final class WallpaperWindow: NSWindow {
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect { frameRect }
 }
 
-private enum Route: String { case scene, yard, tools }
+private enum Route: String { case scene, yard, tools, houses }
 
 @MainActor
-private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler {
+private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate, WKNavigationDelegate, WKScriptMessageHandler, NSMenuItemValidation {
     private struct Background {
         let window: WallpaperWindow
         let view: WKWebView
@@ -28,9 +29,19 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private var previewReady = false
     private var desiredRoute: Route = .scene
     private var routeRevision = 0
+    private var desiredHouseID: String?
+    private var rooms: HouseRooms!
+    private var regularFrame: NSRect?
+    private var smokeOpenedFolders = 0
     private var status: NSStatusItem!
     private var snowOption: NSMenuItem!
+    private var frameOption: NSMenuItem!
+    private var cachedFrames: [NSNumber: [[String: Double]]] = [:]
+    private lazy var widgetFrames = WidgetFrames { [weak self] id, rectangles in
+        self?.setWidgetFrames(rectangles, display: NSNumber(value: id))
+    }
     private let picture = WallpaperImage(temporary: smokeTest)
+    private lazy var systemPicture = SystemVillagePicture()
     private var alpineChoice: NSMenuItem!
     private var imageRevision = 0
     private var picker: NSOpenPanel?
@@ -52,8 +63,12 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
             return
         }
         webRoot = root.standardizedFileURL
-        UserDefaults.standard.register(defaults: [snowPreference: true])
+        UserDefaults.standard.register(defaults: [snowPreference: true, framesPreference: true])
+        do { try setUpRooms() }
+        catch { fail("Could not initialize the folder houses."); return }
         installMenus()
+        NSApp.servicesProvider = rooms
+        rooms.start(applyRequested: !smokeTest && CommandLine.arguments.contains("--apply-houses"))
         NSWorkspace.shared.notificationCenter.addObserver(
             self, selector: #selector(applySnowPreference),
             name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil
@@ -66,9 +81,38 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
             return nil
         }
         if smokeTest {
-            smokeDeadline = Timer.scheduledTimer(timeInterval: 35, target: self, selector: #selector(smokeTimeout), userInfo: nil, repeats: false)
+            smokeDeadline = Timer.scheduledTimer(timeInterval: 55, target: self, selector: #selector(smokeTimeout), userInfo: nil, repeats: false)
         }
         syncScreens()
+        applyFramePreference()
+        if !smokeTest && CommandLine.arguments.contains("--set-village-wallpaper") { setVillagePicture(nil) }
+    }
+
+    private func setUpRooms() throws {
+        let assets = webRoot.appendingPathComponent("assets/houses", isDirectory: true)
+        if smokeTest {
+            let desktop = picture.directory.appendingPathComponent("FixtureDesktop", isDirectory: true)
+            let storage = picture.directory.appendingPathComponent("FixtureRegistry", isDirectory: true)
+            let fixture = desktop.appendingPathComponent("Example Cottage", isDirectory: true)
+            try FileManager.default.createDirectory(at: fixture, withIntermediateDirectories: true)
+            rooms = HouseRooms(desktop: desktop, storage: storage, assets: assets)
+            rooms.openDirectory = { [weak self] url in
+                if url.standardizedFileURL.path == fixture.standardizedFileURL.path { self?.smokeOpenedFolders += 1 }
+                else { self?.fail("A folder request escaped the smoke fixture.") }
+            }
+        } else {
+            rooms = HouseRooms(assets: assets)
+        }
+        rooms.openPicker = { [weak self] in self?.show(.houses) }
+        rooms.openRoom = { [weak self] id in self?.show(.houses, houseID: id) }
+        rooms.sendState = { [weak self] state in
+            guard let self = self, let view = self.previewView, self.previewReady else { return }
+            view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-houses', {detail: state}));",
+                                     arguments: ["state": state], in: nil, in: .page)
+        }
+        rooms.showError = { [weak self] text in
+            if smokeTest { self?.fail(text) } else { self?.tellUser(text) }
+        }
     }
 
     private func installMenus() {
@@ -85,16 +129,23 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         actions.addItem(item("Roll a Snowball", #selector(rollSnow(_:)), target: self))
         actions.addItem(item("Send the Snowplow", #selector(sendPlow(_:)), target: self))
         actions.addItem(item("Tools", #selector(tools(_:)), target: self))
+        let houseLink = actions.addItem(withTitle: "Folder Houses", action: nil, keyEquivalent: "")
+        houseLink.submenu = rooms.menu
         actions.addItem(.separator())
         actions.addItem(item("Return to Preview", #selector(returnToPreview(_:)), target: self))
         actions.addItem(item("Use as Live Wallpaper", #selector(useWallpaper(_:)), target: self))
         snowOption = item("Snow on App Windows", #selector(toggleSnow(_:)), target: self)
         actions.addItem(snowOption)
+        frameOption = item("Frame Desktop Widgets", #selector(toggleFrames(_:)), target: self)
+        actions.addItem(frameOption)
         let images = submenu("Wallpaper Image", in: actions)
-        alpineChoice = item("Alpine Cabin", #selector(restoreAlpine(_:)), target: self)
+        alpineChoice = item("Storybook Village", #selector(restoreAlpine(_:)), target: self)
         alpineChoice.state = picture.dataURL == nil ? .on : .off
         images.addItem(alpineChoice)
         images.addItem(item("Choose Image…", #selector(chooseImage(_:)), target: self))
+        images.addItem(.separator())
+        images.addItem(item("Set Village as Mac Wallpaper", #selector(setVillagePicture(_:)), target: self))
+        images.addItem(item("Restore Previous Mac Wallpaper and Quit", #selector(restoreSystemPicture(_:)), target: self))
         actions.addItem(.separator())
         let nativeApps = submenu("Open Mac App", in: actions)
         for (label, command) in [("Notes", "notes"), ("Music", "music"), ("Clock", "clock")] {
@@ -120,6 +171,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         let view = submenu("View", in: bar)
         view.addItem(item("Play in Snow", #selector(play(_:)), target: self))
         view.addItem(item("Tools", #selector(tools(_:)), target: self))
+        view.addItem(item("Open a House…", #selector(HouseRooms.pick(_:)), target: rooms))
         view.addItem(item("Return to Preview", #selector(returnToPreview(_:)), target: self))
         view.addItem(item("Use as Live Wallpaper", #selector(useWallpaper(_:)), target: self))
         view.addItem(.separator())
@@ -146,6 +198,27 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         link.submenu = child
         parent.addItem(link)
         return child
+    }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(restoreSystemPicture(_:)) { return !smokeTest && systemPicture.hasBackup }
+        return true
+    }
+
+    @objc private func setVillagePicture(_ sender: Any?) {
+        guard !smokeTest else { return }
+        do {
+            _ = try systemPicture.apply(scene: webRoot.appendingPathComponent("assets/scene.jpg"))
+            imageRevision += 1
+            try picture.restoreAlpine()
+            publishImage()
+        } catch { tellUser(error.localizedDescription) }
+    }
+
+    @objc private func restoreSystemPicture(_ sender: Any?) {
+        guard !smokeTest, systemPicture.hasBackup else { return }
+        do { _ = try systemPicture.restore(); NSApp.terminate(nil) }
+        catch { tellUser(error.localizedDescription) }
     }
 
     @objc private func chooseImage(_ sender: Any?) {
@@ -218,6 +291,34 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         snow.setEnabled(!smokeTest && chosen && movement && webEffectsEnabled)
     }
 
+    @objc private func toggleFrames(_ sender: Any?) {
+        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: framesPreference), forKey: framesPreference)
+        applyFramePreference()
+    }
+
+    private func applyFramePreference() {
+        let enabled = UserDefaults.standard.bool(forKey: framesPreference)
+        frameOption.state = enabled ? .on : .off
+        if !smokeTest && enabled {
+            widgetFrames.start()
+            widgetFrames.refresh()
+        } else {
+            if !smokeTest { widgetFrames.stop() }
+            cachedFrames.removeAll()
+            for background in backgrounds.values { sendWidgetFrames([], to: background.view) }
+        }
+    }
+
+    private func setWidgetFrames(_ frames: [[String: Double]], display: NSNumber) {
+        cachedFrames[display] = frames
+        if let background = backgrounds[display], background.ready { sendWidgetFrames(frames, to: background.view) }
+    }
+
+    private func sendWidgetFrames(_ frames: [[String: Double]], to view: WKWebView) {
+        view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-widget-frames', {detail: frames}));",
+                                 arguments: ["frames": frames], in: nil, in: .page)
+    }
+
     private func makeView(surface: String) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = store
@@ -237,7 +338,9 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         """
         if smokeTest {
             startup += """
-            ;window.__cabinRoutes = []; window.__cabinActions = [];
+            ;window.__cabinRoutes = []; window.__cabinActions = []; window.__houseState = null;
+            window.addEventListener('snowfall-houses', event => window.__houseState = event.detail);
+            window.addEventListener('snowfall-widget-frames', event => window.__widgetFrames = event.detail);
             window.addEventListener('snowfall-action', event => window.__cabinActions.push(event.detail));
             window.addEventListener('snowfall-open', event => window.__cabinRoutes.push(event.detail));
             """
@@ -298,7 +401,10 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     }
 
     func applicationDidChangeScreenParameters(_ notification: Notification) {
-        if webRoot != nil { syncScreens() }
+        if webRoot != nil {
+            syncScreens()
+            if !smokeTest && UserDefaults.standard.bool(forKey: framesPreference) { widgetFrames.refresh() }
+        }
     }
 
     private var activeScreen: NSScreen? {
@@ -324,9 +430,10 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     @objc private func useWallpaper(_ sender: Any?) { preview?.close() }
     @objc private func toggleFullscreen(_ sender: Any?) { preview?.toggleFullScreen(sender) }
 
-    private func show(_ route: Route) {
+    private func show(_ route: Route, houseID: String? = nil) {
         routeRevision += 1
         desiredRoute = route
+        desiredHouseID = houseID
         if preview != nil {
             if previewReady { routePreview() }
             return
@@ -355,11 +462,31 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         guard let window = preview, let view = previewView else { return }
         let route = desiredRoute
         let revision = routeRevision
+        if !window.styleMask.contains(.fullScreen) {
+            if route == .houses && regularFrame == nil {
+                let frame = window.frame
+                let usable = (window.screen ?? NSScreen.main)?.visibleFrame ?? frame
+                regularFrame = frame
+                window.setContentSize(NSSize(width: min(420, usable.width), height: min(570, usable.height - 30)))
+                let size = window.frame.size
+                let x = max(usable.minX, min(frame.midX - size.width / 2, usable.maxX - size.width))
+                let y = max(usable.minY, min(frame.midY - size.height / 2, usable.maxY - size.height))
+                window.setFrameOrigin(NSPoint(x: x, y: y))
+            } else if route != .houses, let frame = regularFrame {
+                window.setFrame(frame, display: true)
+                regularFrame = nil
+            }
+        }
         let js = """
+        document.documentElement.toggleAttribute('data-room-window', route === 'houses');
         window.dispatchEvent(new CustomEvent('snowfall-surface', {detail: 'preview'}));
+        if (route === 'houses') window.dispatchEvent(new CustomEvent('snowfall-houses', {detail: state}));
         if (route !== 'scene') window.dispatchEvent(new CustomEvent('snowfall-open', {detail: route}));
+        if (route === 'houses' && house) window.dispatchEvent(new CustomEvent('snowfall-house', {detail: house}));
         """
-        view.callAsyncJavaScript(js, arguments: ["route": route.rawValue], in: nil, in: .page) { [weak self, weak window] result in
+        let arguments: [String: Any] = ["route": route.rawValue, "state": route == .houses ? rooms.state : [:],
+                                         "house": desiredHouseID as Any? ?? NSNull()]
+        view.callAsyncJavaScript(js, arguments: arguments, in: nil, in: .page) { [weak self, weak window] result in
             guard let self = self, let window = window, self.preview === window, self.routeRevision == revision else { return }
             if case .failure(let error) = result { self.fail(error.localizedDescription); return }
             if smokeTest {
@@ -375,10 +502,11 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
     func windowWillClose(_ notification: Notification) {
         guard let closed = notification.object as? NSWindow, closed === preview else { return }
-        if !smokeTest && !closed.styleMask.contains(.fullScreen) { closed.saveFrame(usingName: "SnowfallPreview") }
+        if !smokeTest && regularFrame == nil && !closed.styleMask.contains(.fullScreen) { closed.saveFrame(usingName: "SnowfallPreview") }
         if let view = previewView { stop(view) }
         closed.contentView = nil
         preview = nil
+        regularFrame = nil
         previewView = nil
         previewReady = false
         if !smokeTest { NSApp.setActivationPolicy(.accessory) }
@@ -399,10 +527,12 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
     func applicationWillTerminate(_ notification: Notification) {
         snow.shutdown()
+        if !smokeTest { widgetFrames.stop() }
+        NSApp.servicesProvider = nil
         if smokeTest { try? FileManager.default.removeItem(at: picture.directory) }
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         if let monitor = escapeMonitor { NSEvent.removeMonitor(monitor) }
-        if !smokeTest, let window = preview, !window.styleMask.contains(.fullScreen) { window.saveFrame(usingName: "SnowfallPreview") }
+        if !smokeTest, regularFrame == nil, let window = preview, !window.styleMask.contains(.fullScreen) { window.saveFrame(usingName: "SnowfallPreview") }
         for background in backgrounds.values { background.window.orderOut(nil) }
     }
 
@@ -418,7 +548,15 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
             return
         }
         guard sender === previewView else { return }
+        if command.hasPrefix("openHouseFolder:") {
+            rooms.openFolder(id: String(command.dropFirst("openHouseFolder:".count)))
+            return
+        }
         switch command {
+        case "houses": rooms.list()
+        case "styleHouses": rooms.apply(nil)
+        case "restoreHouses": rooms.restore(nil)
+        case "houseWidgets": rooms.pick(nil)
         case "wallpaper": useWallpaper(nil)
         case "play": show(.yard)
         case "tools": show(.tools)
@@ -495,6 +633,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
             guard let self = self, let current = self.backgrounds[id], current.view === webView else { return }
             if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
             self.backgrounds[id]?.ready = true
+            self.sendWidgetFrames(self.cachedFrames[id] ?? [], to: current.view)
             current.window.orderFrontRegardless()
             self.backgrounds[id]?.pendingActions.removeAll()
             for action in current.pendingActions { self.send(action, to: current.view) }
@@ -528,7 +667,9 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
             fail("No display available to test a wallpaper action.")
             return
         }
+        setWidgetFrames([["x": 0.12, "y": 0.15, "width": 0.08, "height": 0.12]], display: id)
         let before = """
+        if (window.__widgetFrames?.[0]?.x !== 0.12) throw new Error('The synthetic native widget-frame geometry did not arrive.');
         const controls = document.querySelector('#surface-controls');
         if (!controls || controls.getClientRects().length && getComputedStyle(controls).visibility !== 'hidden')
           throw new Error('Interactive controls are visible on the wallpaper.');
@@ -538,6 +679,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         view.callAsyncJavaScript(before, arguments: [:], in: nil, in: .page) { [weak self] result in
             guard let self = self else { return }
             if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
+            self.setWidgetFrames([], display: id)
             self.rollSnow(nil)
             self.sendPlow(nil)
             self.checkWallpaperActions(view)
@@ -595,11 +737,73 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
             guard let self = self else { return }
             if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
             guard self.smokeBridgeReceived else { self.fail("The local native window bridge did not receive the test action."); return }
-            if route == .tools { self.play(nil); return }
+            switch route {
+            case .tools: self.play(nil)
+            case .yard: self.rooms.pick(nil)
+            case .houses:
+                if let id = self.desiredHouseID { self.checkHouseRoom(id, in: view) }
+                else { self.checkHousePicker(in: view) }
+            case .scene: self.fail("Unexpected smoke route.")
+            }
+        }
+    }
+
+    private func checkHousePicker(in view: WKWebView) {
+        let script = """
+        if (!document.querySelector('#house-list') || !document.documentElement.hasAttribute('data-room-window'))
+          throw new Error('The compact house picker did not open.');
+        const send = value => window.webkit.messageHandlers.snowfallWindow.postMessage(value);
+        send('styleHouses');
+        const until = Date.now() + 12000;
+        while ((!window.__houseState?.enabled || !document.querySelector('[data-house-id]')) && Date.now() < until)
+          await new Promise(done => setTimeout(done, 60));
+        const entries = window.__houseState?.houses || [];
+        if (entries.length !== 1 || !document.querySelector('[data-house-id]')) throw new Error('The synthetic house did not appear.');
+        send('openHouseFolder:unknown-id');
+        send('openHouseFolder:' + entries[0].id);
+        """
+        view.callAsyncJavaScript(script, arguments: [:], in: nil, in: .page) { [weak self] result in
+            guard let self = self else { return }
+            if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
+            guard self.smokeOpenedFolders == 1, let house = self.rooms.model.houses.first,
+                  self.rooms.model.houses.count == 1, self.preview?.contentView?.bounds.width == 420 else {
+                self.fail("The synthetic folder bridge or compact native picker failed."); return
+            }
+            // A unique pasteboard exercises the Services entry point without
+            // ever reading, writing, or clearing the person's clipboard.
+            let board = NSPasteboard.withUniqueName()
+            defer { board.releaseGlobally() }
+            board.writeObjects([house.url as NSURL])
+            var serviceError: NSString?
+            self.rooms.openHouseWidgets(board, userData: nil, error: &serviceError)
+            if serviceError != nil || self.desiredHouseID != house.id { self.fail("Finder Services did not route the selected fixture house.") }
+        }
+    }
+
+    private func checkHouseRoom(_ id: String, in view: WKWebView) {
+        let script = """
+        const waitFor = async check => {
+          const until = Date.now() + 8000;
+          while (!check() && Date.now() < until) await new Promise(done => setTimeout(done, 60));
+          return check();
+        };
+        if (!await waitFor(() => document.querySelector('[data-room-id]')?.dataset.roomId === id))
+          throw new Error('Finder Services did not open the selected house room.');
+        document.querySelector("[data-widget='notes']")?.click();
+        const editor = document.querySelector('textarea');
+        if (!editor) throw new Error('The fixture house notebook did not open.');
+        editor.value = 'Local smoke-test note';
+        editor.dispatchEvent(new Event('input', {bubbles:true}));
+        window.webkit.messageHandlers.snowfallWindow.postMessage('restoreHouses');
+        if (!await waitFor(() => window.__houseState?.enabled === false && window.__houseState?.houses.length === 0))
+          throw new Error('The fixture icon did not restore.');
+        """
+        view.callAsyncJavaScript(script, arguments: ["id": id], in: nil, in: .page) { [weak self] result in
+            guard let self = self else { return }
+            if case .failure(let error) = result { self.fail(self.errorMessage(error)); return }
             self.useWallpaper(nil)
             guard self.preview == nil, self.backgrounds.values.allSatisfy({ $0.window.isVisible }) else {
-                self.fail("Closing play did not return to the live wallpaper.")
-                return
+                self.fail("Closing the house room did not return to the live wallpaper."); return
             }
             self.checkImageReset()
         }
@@ -614,10 +818,10 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         view.callAsyncJavaScript(check, arguments: [:], in: nil, in: .page) { [weak self] result in
             guard let self = self else { return }
             guard case .success(let value) = result, value as? Bool == true else {
-                self.fail("The restored alpine scene did not appear."); return
+                self.fail("The restored village scene did not appear."); return
             }
             self.smokeDeadline?.invalidate()
-            print("PASS: click-through wallpaper on \(self.backgrounds.count) display(s), roll and plow, native tools and play, local storage, trusted bridge, local picture conversion/selection, and restoring the alpine scene.")
+            print("PASS: click-through wallpaper on \(self.backgrounds.count) display(s), roll and plow, native tools and play, local storage, trusted bridge, local picture conversion/selection, widget frame delivery, synthetic Finder folder styling/restoration, Finder Services, per-house notebook, and restoring the village scene.")
             NSApp.terminate(nil)
         }
     }
@@ -645,6 +849,10 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
 @main
 private enum Snowfall {
     @MainActor static func main() {
+        if CommandLine.arguments.contains("--village-status") {
+            guard let root = Bundle.main.resourceURL else { print("{\"error\":\"Missing bundled resources\"}"); exit(1) }
+            exit(HouseRooms.printStatus(assets: root.appendingPathComponent("Desktop/assets/houses", isDirectory: true)))
+        }
         let app = NSApplication.shared
         let delegate = CabinApp()
         app.setActivationPolicy(.accessory)
