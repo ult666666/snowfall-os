@@ -115,6 +115,11 @@
       button.append(paper(item.kind), label);
       button.addEventListener('click', () => openItem(item)); fragment.append(button);
     }
+    const plaque = document.createElement('span');
+    plaque.className = 'post-office-plaque';
+    plaque.setAttribute('aria-hidden','true');
+    plaque.textContent = 'Post office';
+    fragment.append(plaque);
     counter.replaceChildren(fragment);
     officeDoor.title = items.length === 1 ? 'Post office · 1 item' : 'Post office · '+items.length+' items';
     place();

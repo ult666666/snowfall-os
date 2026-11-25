@@ -51,9 +51,12 @@
   }
   function facade(node,house) {
     const image = document.createElement('img');
-    image.src='assets/houses/cottage-'+house.variant+'.png?v=5.0.0';
+    image.src='assets/houses/cottage-'+house.variant+'.png?v=6.0.0';
     image.alt='';image.draggable=false;
     const sign=document.createElement('span');sign.className='house-name';sign.textContent=house.name;
+    const hint=document.createElement('small');
+    hint.textContent=native ? 'Click to play · Double-click to open' : 'Click to play · Double-click for widgets';
+    sign.append(hint);
     node.append(image,sign);
   }
   function place(node,x,y,size) {
@@ -64,12 +67,74 @@
     hoveredId=id;
     for(const node of houses.children) node.classList.toggle('is-identified',node.dataset.houseId===id);
   }
+  const localWindow = native && window.snowfallSurface === 'preview';
+  if (localWindow) {
+    document.documentElement.setAttribute('data-local-village','');
+    houses.removeAttribute('aria-hidden');
+    houses.setAttribute('aria-label','Your folder cottages');
+  }
+  const houseActions = document.createElement('div');
+  houseActions.className = 'door-actions';
+  houseActions.hidden = true;
+  if (localWindow) scene.append(houseActions);
+
+  function closeDoorActions() {
+    houseActions.hidden = true;
+    houseActions.replaceChildren();
+  }
+  function offerDoor(plot) {
+    if (!localWindow) return;
+    const bridge = window.webkit.messageHandlers.snowfallWindow;
+    const name = document.createElement('strong');
+    name.textContent = plot.name;
+    const open = document.createElement('button');
+    open.type = 'button'; open.textContent = 'Open folder';
+    open.addEventListener('click', () => {
+      closeDoorActions();
+      bridge.postMessage('openHouseFolder:' + plot.id);
+    });
+    const room = document.createElement('button');
+    room.type = 'button'; room.textContent = 'House widgets';
+    room.addEventListener('click', () => {
+      closeDoorActions();
+      bridge.postMessage({action:'houseRoom',id:plot.id});
+    });
+    houseActions.replaceChildren(name, open, room);
+    houseActions.hidden = false;
+    const side = houseActions.offsetWidth / 2;
+    houseActions.style.left = Math.max(side+6,Math.min(innerWidth-side-6,plot.x*innerWidth))+'px';
+    const roof = plot.y*innerHeight-plot.size*.89;
+    houseActions.style.top = (roof > houseActions.offsetHeight + 6 ?
+      roof-houseActions.offsetHeight-4 : Math.min(innerHeight-houseActions.offsetHeight-4,plot.y*innerHeight+5))+'px';
+  }
+  if (localWindow) {
+    scene.addEventListener('pointerdown',event => {
+      if (!event.target.closest('.wallpaper-cottage,.door-actions,.porch-return')) closeDoorActions();
+    });
+    window.addEventListener('snowfall-surface',closeDoorActions);
+    window.addEventListener('resize',closeDoorActions);
+  }
+
   function showLocalHouses() {
     const nodes = document.createDocumentFragment();
     for (const plot of plots) {
       if (plot.drawHouse !== true || typeof plot.name !== 'string' ||
           !Number.isInteger(plot.variant) || plot.variant < 1 || plot.variant > 6) continue;
-      const node = document.createElement('div');node.className='wallpaper-cottage';node.dataset.houseId=plot.id;
+      const node = document.createElement(localWindow ? 'button' : 'div');
+      node.className='wallpaper-cottage'; node.dataset.houseId=plot.id;
+      if (localWindow) {
+        node.type='button';
+        node.setAttribute('aria-label',plot.name+' folder cottage');
+        node.addEventListener('click', event => {
+          if (event.detail > 1) return;
+          tap(plot); offerDoor(plot);
+        });
+        node.addEventListener('dblclick', () => {
+          stop(); closeDoorActions();
+          window.webkit.messageHandlers.snowfallWindow.postMessage('openHouseFolder:'+plot.id);
+        });
+        node.addEventListener('contextmenu', event => { event.preventDefault(); offerDoor(plot); });
+      }
       place(node,plot.x*innerWidth,plot.y*innerHeight,plot.size);facade(node,plot);nodes.append(node);
     }
     houses.replaceChildren(nodes);identify(hoveredId);
@@ -121,7 +186,7 @@
     }
   }
   function visiblePlots() {
-    if (native) return document.documentElement.dataset.surface === 'wallpaper' ? plots : [];
+    if (native) return !scene.classList.contains('room-mode') && !scene.classList.contains('yard-active') ? plots : [];
     if (!document.querySelector('#demo-village').getClientRects().length) return [];
     return Array.from(document.querySelectorAll('[data-sample]'), samplePlot).filter(p => p.size > 0);
   }
@@ -174,7 +239,7 @@
     button.style.top = feet + 'px';
     button.style.setProperty('--figure-width', width + 'px');
     const image = document.createElement('img');
-    image.src = 'assets/props/' + asset + '.png?v=5.0.0';
+    image.src = 'assets/props/' + asset + '.png?v=6.0.0';
     image.className = className;
     image.alt = '';
     image.draggable = false;
@@ -323,7 +388,7 @@
   if(!native) {
     populateSamples();
     // Native plots arrive from the same artwork manifest via snowfall-house-plots.
-    if(location.protocol!=='file:') fetch('assets/village-plan.json?v=5.0.0').then(r=>{
+    if(location.protocol!=='file:') fetch('assets/village-plan.json?v=6.0.0').then(r=>{
       if(!r.ok)throw new Error('Village layout unavailable');return r.json();
     }).then(plan=>{if(Array.isArray(plan.streets)){streets=plan.streets;positionScenery();invalidate();}}).catch(()=>{});
   }

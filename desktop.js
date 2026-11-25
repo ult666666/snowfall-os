@@ -97,10 +97,11 @@
     const time = $('#village-time');
     time.textContent = now.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit',hour12:!twentyFour});
     time.dateTime = now.toISOString();
-    townClock.setAttribute('aria-label','Town clock, '+time.textContent+'. Switch time format');
+    townClock.setAttribute('aria-label','Town clock, '+time.textContent+(isMacApp ? '. Open Clock' : '. Switch time format'));
     if (!document.hidden && !(isMacApp && surface === 'wallpaper')) clockTimer = setTimeout(updateClock,60025-now.getSeconds()*1000-now.getMilliseconds());
   }
   townClock.addEventListener('click',() => {
+    if (isMacApp) { bridge.postMessage('clock'); return; }
     twentyFour = !twentyFour;
     try { localStorage.setItem('snowfall-os.clock24',twentyFour ? '1' : '0'); } catch {}
     updateClock(); townClock.classList.add('show-time');
@@ -204,6 +205,14 @@
           button.addEventListener('click',() => bridge.postMessage(module));
           group.append(button);
         }
+        if (window.snowfallSupportsDesktopWidgets) {
+          const settings = document.createElement('button');
+          settings.className = 'tool-row';
+          settings.type = 'button';
+          settings.append(icon('settings'),document.createTextNode('Desktop widget settings'));
+          settings.addEventListener('click',() => bridge.postMessage('widgetSettings'));
+          group.append(settings);
+        }
         body.append(rule,subtitle,group);
       }
       list.querySelector('button').focus({preventScroll:true});
@@ -236,7 +245,7 @@
   }
   function finishYard() {
     leaveYard();
-    if (isMacApp) bridge.postMessage('wallpaper');
+    if (isMacApp) bridge.postMessage('preview');
     else $('#play').focus({preventScroll:true});
   }
   function setSurface(next) {
@@ -261,7 +270,7 @@
     if (custom !== null && (typeof custom !== 'string' || !custom.startsWith('data:image/jpeg;base64,'))) return;
     const revision = ++imageRevision;
     const replacement = new Image();
-    replacement.src = custom || 'assets/scene.jpg?v=5.0.0';
+    replacement.src = custom || 'assets/scene.jpg?v=6.0.0';
     try {
       await replacement.decode();
       if (revision !== imageRevision) return;
@@ -297,7 +306,7 @@
   $('#play').addEventListener('click',() => openYard());
   $('#back-to-desk').addEventListener('click',finishYard);
   $('#panel-close').addEventListener('click',() => {
-    if(isMacApp && activeTool === 'houses') bridge.postMessage('wallpaper');
+    if(isMacApp && activeTool === 'houses') bridge.postMessage('preview');
     else closeTools(true);
   });
   $('#panel-back').addEventListener('click',() => showTools());
@@ -305,13 +314,19 @@
     if (!panel.hidden && !panel.contains(e.target) && !e.target.closest('#surface-controls')) closeTools();
   });
   window.addEventListener('keydown',e => {
-    if (surface === 'wallpaper') return;
+    if (e.defaultPrevented || surface === 'wallpaper' || document.querySelector('dialog[open]')) return;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       if (panel.hidden) showTools(); else closeTools(true);
     } else if (e.key === 'Escape') {
       SnowPorches.stop();
-      if (!panel.hidden) { e.preventDefault(); if (activeTool) showTools(); else closeTools(true); }
+      const fieldBack = scene.querySelector('#snow-playground:not([hidden]) button[data-action="back"]:not([hidden])');
+      if (fieldBack && panel.hidden) { e.preventDefault(); fieldBack.click(); }
+      else if (!panel.hidden) {
+        e.preventDefault();
+        if (isMacApp && scene.classList.contains('room-mode')) bridge.postMessage('preview');
+        else if (activeTool) showTools(); else closeTools(true);
+      }
       else if (inYard) { e.preventDefault(); finishYard(); }
       else if (isMacApp) bridge.postMessage('wallpaper');
       else wake();

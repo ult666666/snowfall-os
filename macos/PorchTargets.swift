@@ -31,7 +31,6 @@ import AppKit
             if !ambientEnabled { for (_, panel) in windows.values { panel.button.clearGlint() } }
         }
     }
-    private var lastGlint: TimeInterval = -.infinity
     var onTap: ((Plot) -> Void)?
     var onOpen: ((String) -> Void)?
     var onRoom: ((String) -> Void)?
@@ -64,7 +63,7 @@ import AppKit
     var plan: VillageComposition?
     private var widgets: [NSNumber: WidgetFrames.Frames] = [:]
     private var letters: [Letter] = []
-    private var addresses = UserDefaults.standard.dictionary(forKey: "VillageParcelAddresses") as? [String: Int] ?? [:]
+    private(set) var addresses = UserDefaults.standard.dictionary(forKey: "VillageParcelAddresses") as? [String: Int] ?? [:]
 
     func configure(plots: [Plot], houses: [FolderVillage.House], scenery: Bool,
                    widgets: [NSNumber: WidgetFrames.Frames], files: [[String: String]]) {
@@ -201,13 +200,7 @@ import AppKit
             let panel = windows[id]?.1 ?? DoorPanel()
             let button = panel.button
             button.door = door
-            button.allowGlint = { [weak self] in
-                guard let self, self.ambientEnabled, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else { return false }
-                let now = ProcessInfo.processInfo.systemUptime
-                guard now - self.lastGlint > 2.8 else { return false }
-                self.lastGlint = now
-                return true
-            }
+            button.allowGlint = { [weak self] in self?.ambientEnabled == true }
             button.onTap = { [weak self] in
                 switch door.civic {
                 case .postOffice: self?.onOffice?()
@@ -221,6 +214,11 @@ import AppKit
                 if door.drawHouse { self?.onHover?(door.plot.display, entered ? id : nil) }
             }
             button.onLetter = { [weak self] id in self?.onLetter?(id) }
+            switch door.civic {
+            case .clock: button.toolTip = "Open Clock"
+            case .postOffice: button.toolTip = "Browse Desktop files"
+            case nil: button.toolTip = nil
+            }
             button.setAccessibilityLabel(door.title)
             button.setAccessibilityHelp(door.folder != nil ? "Click to play catch. Double-click to open the folder." :
                                         door.civic == .clock ? "Open Clock." : "Browse files on the Desktop.")
@@ -305,6 +303,11 @@ import AppKit
         func retire() { button.cancel(); orderOut(nil); close() }
     }
 
+    private final class LetterButton: NSButton {
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override func resetCursorRects() { addCursorRect(bounds, cursor:.pointingHand) }
+    }
+
     private final class DoorButton: NSView, NSDraggingSource {
         var door: Door?
         var onTap: (() -> Void)?
@@ -315,7 +318,6 @@ import AppKit
         var allowGlint: (() -> Bool)?
         private var tracking: NSTrackingArea?
         private var glint: CAGradientLayer?
-        private var lastGlint: TimeInterval = -.infinity
         private var delayed: DispatchWorkItem?
         private var pressed: CGPoint?
         private var paperButtons: [NSButton] = []
@@ -329,22 +331,20 @@ import AppKit
         required init?(coder: NSCoder) { nil }
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
         override var mouseDownCanMoveWindow: Bool { false }
+        override func resetCursorRects() { addCursorRect(bounds, cursor:.pointingHand) }
+        override func cursorUpdate(with event: NSEvent) { NSCursor.pointingHand.set() }
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
             if let tracking { removeTrackingArea(tracking) }
-            let area = NSTrackingArea(rect:.zero, options:[.inVisibleRect,.mouseEnteredAndExited,.activeAlways], owner:self, userInfo:nil)
+            let area = NSTrackingArea(rect:.zero, options:[.inVisibleRect,.mouseEnteredAndExited,.cursorUpdate,.activeAlways], owner:self, userInfo:nil)
             addTrackingArea(area)
             tracking = area
         }
         override func mouseEntered(with event: NSEvent) {
             guard let door, door.folder != nil, let layer, NSEvent.pressedMouseButtons == 0 else { return }
             onHover?(true)
-            let now = ProcessInfo.processInfo.systemUptime
-            guard now - lastGlint > 9, allowGlint?() == true else { return }
-            lastGlint = now
-            clearGlint()
-            // This little side window occurs on every house design. Its warm light
-            // blooms at the pane and fades back into the original painted glass.
+            guard glint == nil, allowGlint?() == true else { return }
+            // Keep the lamp lit until the visitor leaves this door.
             let s = door.plot.size
             let glow = CAGradientLayer()
             glow.name = "CottageWindowLight"
@@ -355,25 +355,30 @@ import AppKit
             glow.colors = [light.withAlphaComponent(0.86).cgColor, light.withAlphaComponent(0.32).cgColor,
                            light.withAlphaComponent(0).cgColor]
             glow.locations = [0, 0.38, 1]
-            let x = bounds.midX + s * (door.folder == nil ? 0.12 : 0.20)
-            let y = bounds.maxY - s * (door.folder == nil ? 0.55 : 0.61)
-            glow.frame = CGRect(x:x-s*0.14,y:y-s*0.15,width:s*0.28,height:s*0.30)
-            glow.opacity = 0
+            let x = bounds.midX + s * 0.20
+            let y = bounds.maxY - s * 0.61
+            glow.frame = CGRect(x:x-s*0.18,y:y-s*0.18,width:s*0.36,height:s*0.36)
+            glow.opacity = 0.86
             layer.addSublayer(glow)
             glint = glow
-            let pulse = CAKeyframeAnimation(keyPath:"opacity")
-            pulse.values = [0, 0.85, 0.5, 0]
-            pulse.keyTimes = [0, 0.24, 0.53, 1]
-            pulse.duration = 1.35
-            glow.add(pulse, forKey:"lantern")
+            if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                let rise = CABasicAnimation(keyPath:"opacity")
+                rise.fromValue = 0
+                rise.toValue = glow.opacity
+                rise.duration = 0.16
+                glow.add(rise, forKey:"lantern")
+            }
         }
-        override func mouseExited(with event: NSEvent) { onHover?(false) }
+        override func mouseExited(with event: NSEvent) {
+            clearGlint()
+            if door?.folder != nil { onHover?(false) }
+        }
         func configureLetters() {
             paperButtons.forEach { $0.removeFromSuperview() }
             paperButtons = []
             guard case let .postOffice(letters) = door?.civic else { return }
             for (index, letter) in letters.enumerated() {
-                let button = NSButton(title: "", target: self, action: #selector(openLetter(_:)))
+                let button = LetterButton(title: "", target: self, action: #selector(openLetter(_:)))
                 button.bezelStyle = .regularSquare
                 button.isBordered = false
                 button.isTransparent = true

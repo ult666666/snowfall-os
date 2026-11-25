@@ -54,7 +54,7 @@
     node.addEventListener('click',click);
     return node;
   }
-  const imgPath = variant => 'assets/houses/cottage-'+variant+'.png?v=5.0.0';
+  const imgPath = variant => 'assets/houses/cottage-'+variant+'.png?v=6.0.0';
   function art(house) {
     const node=el('img','room-cottage');
     node.alt=''; node.draggable=false; node.src=imgPath(house.variant);

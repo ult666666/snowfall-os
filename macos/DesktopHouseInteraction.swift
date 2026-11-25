@@ -257,14 +257,16 @@ import Carbon
 
     /// An opt-in command-line check of the running wallpaper. No coordinates,
     /// house IDs, names, interaction times, or counters are written to disk.
-    static func printSessionStatus(hitPoint: Bool = false, office: Bool = false) -> Int32 {
+    static func printSessionStatus(hitPoint: Bool = false, office: Bool = false, playground: String? = nil) -> Int32 {
         let bus = DistributedNotificationCenter.default(), id = UUID().uuidString
         var answer: String?
         let observer = bus.addObserver(forName: statusReply, object: id, queue: .main) { note in
             guard let info = note.userInfo else { return }
             let keys = hitPoint ? ["x","y","window","exposed"] :
                 ["observing","animatedClicks","located","nativeTargets","localClicks","finderDrawing","feedbackVisible",
-                 "composedFolders","unplacedFolders","widgets","files","letterTargets","civicTargets","deskVisible"]
+                 "composedFolders","unplacedFolders","widgets","files","letterTargets","civicTargets","deskVisible",
+                 "playgroundTargets","playgroundInputs","playgroundStage","playgroundThrows","playgroundDodges","playgroundPasses",
+                 "playgroundMode","playgroundIncoming"]
             var filtered: [String: NSNumber] = [:]
             for name in keys { if let value = info[name] as? NSNumber { filtered[name] = value } }
             if !filtered.isEmpty, let bytes = try? JSONSerialization.data(withJSONObject:filtered,options:[.sortedKeys]) {
@@ -272,7 +274,9 @@ import Carbon
             }
         }
         defer { bus.removeObserver(observer) }
-        bus.postNotificationName(statusRequest, object: id, userInfo: ["hitPoint":hitPoint, "office":office], deliverImmediately: true)
+        var request: [String:Any] = ["hitPoint":hitPoint,"office":office]
+        if let playground { request["playground"] = playground }
+        bus.postNotificationName(statusRequest, object:id, userInfo:request, deliverImmediately:true)
         let end = Date(timeIntervalSinceNow: 2)
         while answer == nil, end.timeIntervalSinceNow > 0 { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.04)) }
         print(answer ?? "{\"error\":\"Running wallpaper did not respond\"}")

@@ -7,7 +7,7 @@
   let pending = 0;
   const trim = new Image();
   trim.onload = schedule;
-  trim.src = 'assets/widget-cottage.webp?v=5.0.0';
+  trim.src = 'assets/widget-cottage.webp?v=6.0.0';
 
   // Two adjacent modules share a station roof and foundation. macOS still draws each live pane.
   function buildings(windows) {
