@@ -181,7 +181,8 @@
       pt.y*h > rect.top-4 && pt.y*h < rect.bottom+38)) || sites[0];
   }
   function throwBall(p, now) {
-    if (!round) {
+    const opening = !round;
+    if (opening) {
       captionRival?.remove(); captionRival = null;
       const friend = hitFriend(p);
       const rival = friend || chooseRival(p);
@@ -191,12 +192,37 @@
       totals = {shots:0,returns:0,dodges:0,player:0,flurry:0};
     }
     if (now - round.lastShot < 500) return;
-    round.lastShot = now; totals.shots++; totals.player++;
-    ball(p,{x:round.rival.x,y:round.rival.y-.028});
+    const rival = round.node || friends.querySelector('.free-snow-rival');
+    if (!rival) return;
+    const box = rival.getBoundingClientRect();
+    const w = scene.clientWidth, h = scene.clientHeight;
+    const px = p.x*w, py = p.y*h;
+    // Include the scarf and mittens, with a little extra room for trackpad and arrow-key aim.
+    const hit = opening || (px >= box.left-7 && px <= box.right+7 &&
+      py >= box.top-7 && py <= box.bottom+9);
+    const target = opening ? {x:(box.left+box.width*.5)/w,y:(box.top+box.height*.53)/h} : p;
+    const start = opening && !round.friendId ? p : {
+      x:clamp(p.x+(p.x>.5 ? -.055 : .055),.015,.985), y:clamp(p.y+.085,.05,.98)
+    };
+    round.lastShot = now;
+    totals.shots++;
+    if (hit) totals.player++;
+    ball(start,target,360);
+    const impact = create('i','snowball-impact');
+    const quiet = softMotion();
+    impact.classList.toggle('hit',hit);
+    impact.classList.toggle('still',quiet);
+    place(impact,target);
+    // The wallpaper's document timeline can pause behind an app window.
+    setTimeout(() => impact.remove(),quiet ? 350 : 850);
     if (totals.player === 3) {
       label('You win!  3 · '+totals.flurry,round.rival,1550); dismissRound(true);
+    } else if (opening) {
+      label('Click Flurry to throw again',round.rival,1250);
+    } else if (!hit) {
+      label('Wide! Aim at Flurry',round.rival,1000);
     } else {
-      label('You '+totals.player+' · '+totals.flurry+' Flurry',round.rival,1100);
+      label('Hit!  You '+totals.player+' · '+totals.flurry+' Flurry',round.rival,1100);
     }
   }
   function tick(now = Date.now()) {
@@ -260,11 +286,18 @@
       drawFriends(); tick();
     }
   }
-  function end(p) {
+  function end(p, nativeHoldMs) {
     if (!held) return;
     move(p);
     if (!held) return;
-    const now = Date.now(); tick(now);
+    const now = Date.now();
+    // WebKit may batch a complete desktop press while the wallpaper is
+    // throttled. The hardware timestamps still tell us how long it was held.
+    if (Number.isFinite(nativeHoldMs)) {
+      held.at = now - Math.max(0,nativeHoldMs);
+      if (nativeHoldMs < packTimes[0]) held.progress = 0;
+    }
+    tick(now);
     if (held.progress) plant(); else throwBall(p,now);
     held.node?.remove(); held = null; drawFriends(); tick();
   }
@@ -285,7 +318,9 @@
     pointerId = null; end(point(e));
   });
   window.addEventListener('pointercancel',e => { if (pointerId === e.pointerId) clearPlay(); });
-  window.addEventListener('blur',() => { if (held || round) clearPlay(); });
+  window.addEventListener('blur',() => {
+    if (window.snowfallSurface !== 'wallpaper' && (held || round)) clearPlay();
+  });
   window.addEventListener('keydown',e => {
     if (e.key==='Escape' && (held || round) && enabled()) {
       e.preventDefault(); e.stopImmediatePropagation(); clearPlay(); return;
@@ -311,7 +346,7 @@
     if (d.phase==='cancel') {clearPlay();return;}
     if (!validPoint(d) || !enabled()) return;
     const p = {x:d.x,y:d.y};
-    if (d.phase==='down') begin(p); else if (d.phase==='up') end(p); else if (d.phase==='move') move(p);
+    if (d.phase==='down') begin(p); else if (d.phase==='up') end(p,d.heldMs); else if (d.phase==='move') move(p);
   });
   window.addEventListener('snowfall-widget-frames',({detail}) => {
     if (Array.isArray(detail)) widgetFrames = detail.filter(r => r &&

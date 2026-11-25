@@ -112,6 +112,29 @@ import AppKit
         update([])
     }
 
+    // Finder can keep its screen-sized icon window on screen even while Desktop
+    // & Dock hides every item. Respect the settings for the current desktop mode.
+    static func permitsFinderIcons(createDesktop: Bool, stageManager: Bool, hideStandard: Bool, hideStage: Bool) -> Bool {
+        createDesktop && !(stageManager ? hideStage : hideStandard)
+    }
+
+    static func checkFinderIconPolicy() -> Bool {
+        !permitsFinderIcons(createDesktop: true, stageManager: false, hideStandard: true, hideStage: false) &&
+         permitsFinderIcons(createDesktop: true, stageManager: true, hideStandard: true, hideStage: false) &&
+        !permitsFinderIcons(createDesktop: true, stageManager: true, hideStandard: false, hideStage: true) &&
+         permitsFinderIcons(createDesktop: true, stageManager: false, hideStandard: false, hideStage: true) &&
+        !permitsFinderIcons(createDesktop: false, stageManager: false, hideStandard: false, hideStage: false)
+    }
+
+    private static func finderIconsEnabled() -> Bool {
+        let finder = UserDefaults(suiteName: "com.apple.finder")
+        let manager = UserDefaults(suiteName: "com.apple.WindowManager")
+        return permitsFinderIcons(createDesktop: finder?.object(forKey: "CreateDesktop") as? Bool ?? true,
+                                  stageManager: manager?.bool(forKey: "GloballyEnabled") ?? false,
+                                  hideStandard: manager?.bool(forKey: "StandardHideDesktopIcons") ?? false,
+                                  hideStage: manager?.bool(forKey: "HideDesktop") ?? false)
+    }
+
     private func refreshVisibility(force: Bool) {
         let screens: [(id: CGDirectDisplayID, frame: CGRect, usable: CGRect)] = NSScreen.screens.compactMap {
             guard let n = $0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber else { return nil }
@@ -124,7 +147,9 @@ import AppKit
         }
         let iconLevel = Int(CGWindowLevelForKey(.desktopIconWindow))
         let pid = NSRunningApplication.runningApplications(withBundleIdentifier:"com.apple.finder").first?.processIdentifier
-        let rows = CGWindowListCopyWindowInfo(.optionOnScreenOnly,kCGNullWindowID) as? [[String:Any]] ?? []
+        let rows = Self.finderIconsEnabled()
+            ? CGWindowListCopyWindowInfo(.optionOnScreenOnly,kCGNullWindowID) as? [[String:Any]] ?? []
+            : []
         var visible = Set<CGDirectDisplayID>()
         for row in rows {
             guard (row[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid,
@@ -310,16 +335,7 @@ import AppKit
     }
 
     private final class DoorButton: NSView, NSDraggingSource {
-        var door: Door? {
-            didSet { if oldValue != door { needsDisplay = true } }
-        }
-        override func draw(_ dirtyRect: NSRect) {
-            super.draw(dirtyRect)
-            guard let door, !door.drawHouse, door.folder != nil,
-                  let ctx = NSGraphicsContext.current?.cgContext else { return }
-            let scale = max(0.75, min(1.05, door.plot.size/80))
-            VillageStill.drawFolderMarker(ctx, at:CGPoint(x:bounds.maxX-12*scale, y:12*scale), scale:scale)
-        }
+        var door: Door?
         var onTap: (() -> Void)?
         var onOpen: (() -> Void)?
         var onRoom: (() -> Void)?

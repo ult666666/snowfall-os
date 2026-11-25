@@ -24,6 +24,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         var ready = false
         var pendingActions: [String] = []
         var villageSignature: Data?
+        var paintedCottages = 0
     }
     private var backgrounds: [NSNumber: Background] = [:]
     private var preview: NSWindow?
@@ -95,9 +96,10 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         doorstep.occupiedDoorFrames = { [weak self] in self?.doors.occupiedFrames ?? [] }
         ground.canReadDesktop = { [weak self] in self?.rooms.model.enabled == true && self?.rooms.canCompose == true }
         ground.surfaces = { [weak self] in self?.groundSurfaces() ?? [] }
-        ground.onInput = { [weak self] id, phase, point in
+        ground.onInput = { [weak self] id, phase, point, heldSeconds in
             guard let surface = self?.backgrounds[id], surface.ready else { return }
-            let input: [String:Any] = ["phase":phase,"x":point.x,"y":point.y]
+            var input: [String:Any] = ["phase":phase,"x":point.x,"y":point.y]
+            if let heldSeconds { input["heldMs"] = heldSeconds * 1000 }
             surface.view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-ground-input',{detail:input}));",
                 arguments:["input":input],in:nil,in:.page)
         }
@@ -475,8 +477,24 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         let signature = try? JSONSerialization.data(withJSONObject: snapshot, options: .sortedKeys)
         if let signature, backgrounds[display]?.villageSignature == signature { return }
         backgrounds[display]?.villageSignature = signature
-        view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-house-plots', {detail: plots}));",
-                                 arguments: ["plots": plots], in: nil, in: .page)
+        backgrounds[display]?.paintedCottages = 0
+        let paint = """
+        window.dispatchEvent(new CustomEvent('snowfall-house-plots', {detail: plots}));
+        const cottages = Array.from(document.querySelectorAll('#wallpaper-cottages .wallpaper-cottage'));
+        const visible = await Promise.all(cottages.map(async node => {
+          const image = node.querySelector('img'), name = node.querySelector('.address-lettering');
+          if (!image || !name?.textContent.trim()) return false;
+          try { await image.decode(); } catch { return false; }
+          return image.naturalWidth > 0 && image.getBoundingClientRect().height > 0 &&
+                 name.getBoundingClientRect().width > 0;
+        }));
+        return visible.filter(Boolean).length;
+        """
+        view.callAsyncJavaScript(paint, arguments: ["plots": plots], in: nil, in: .page) { [weak self, weak view] result in
+            guard let self, let current = self.backgrounds[display], current.view === view,
+                  current.villageSignature == signature, case .success(let count) = result else { return }
+            self.backgrounds[display]?.paintedCottages = count as? Int ?? 0
+        }
         sendFiles(to: view)
         pendingPictures.removeValue(forKey: display)?.cancel()
         guard !smokeTest, rooms.canCompose, picture.dataURL == nil, systemPicture.hasBackup else { return }
@@ -566,6 +584,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
                        "observing":porches.observing, "located":doors.displayedPlots.count, "animatedClicks":animatedPorchClicks,
                        "nativeTargets":doors.count, "localClicks":localPorchClicks,
                        "composedFolders":doors.composedCount, "unplacedFolders":doors.unplacedCount,
+                       "paintedCottages":backgrounds.values.reduce(0) { $0 + $1.paintedCottages },
                        "widgets":cachedFrames.values.reduce(0) { $0 + $1.count }, "files":postOffice.items.count,
                        "letterTargets":doors.letterCount, "civicTargets":doors.civicCount, "deskVisible":postOffice.deskIsVisible,
                        "finderDrawing":doors.finderDisplays.count, "feedbackVisible":doorstep.isVisible] }
@@ -1101,10 +1120,22 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         guard await wait({yes("holding") && number("holdStage") == 3}) else {fail("Holding at the first spot did not pack all three stages.");return}
         send(.leftMouseUp,a)
         guard await wait({number("snowmen") == 1 && !yes("holding") && at(a)}) else {fail("The first snowman missed its location.");return}
-        send(.leftMouseDown,b)
-        guard await wait({number("holdStage") == 3}) else {fail("The second spot could not build a snowman.");return}
-        send(.leftMouseUp,b)
-        guard await wait({number("snowmen") == 2 && at(b)}) else {fail("Both locally positioned friends were not retained.");return}
+        // Finder and WindowManager can exchange receivers mid-gesture, and a
+        // throttled wallpaper may only see both messages after the release.
+        let release = ProcessInfo.processInfo.systemUptime
+        let passiveBefore = ground.passiveInputs
+        guard ground.checkObservedEvent(.leftMouseDown,point:b,surface:surface,timestamp:release-1.6),
+              ground.checkObservedEvent(.leftMouseUp,point:b,surface:surface,timestamp:release,clickThroughWindow:window),
+              ground.passiveInputs == passiveBefore+1,
+              await wait({number("snowmen") == 2 && at(b)}) else {
+            fail("A batched real-duration hold did not plant through the passive desktop route.");return
+        }
+        let baseLevel = Int(CGWindowLevelForKey(.desktopWindow))-2
+        guard GroundInteraction.isBackgroundWindow(bundle:"com.apple.wallpaper.agent",level:baseLevel,bounds:surface.frame,usable:surface.usable),
+              !GroundInteraction.isBackgroundWindow(bundle:"com.apple.WindowManager",level:baseLevel,bounds:block,usable:surface.usable),
+              !GroundInteraction.isBackgroundWindow(bundle:"com.apple.finder",level:0,bounds:surface.frame,usable:surface.usable) else {
+            fail("A layered desktop receiver was misclassified.");return
+        }
         let c = CGPoint(x:0.51,y:0.55)
         send(.leftMouseDown,c)
         send(.leftMouseDragged,CGPoint(x:c.x,y:-0.02))
@@ -1114,7 +1145,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         guard await wait({yes("fightActive") && number("shots") >= 1 && at(c)}),
               await wait({number("returns") >= 1}) else {fail("A tap on open snow did not start a returning snowball fight.");return}
         smokeDeadline?.invalidate()
-        print("PASS: native holds built on open snow and on the former lower-center sign, a tap elsewhere started a returning snowball fight, and modified, covered and widget clicks were excluded.")
+        print("PASS: local and passively observed holds planted on open snow, including a delayed hardware-timed release. A tap received return fire. Widgets, ordinary windows and modified clicks were excluded.")
         NSApp.terminate(nil)
     }
 
@@ -1294,10 +1325,11 @@ private enum Snowfall {
         if CommandLine.arguments.contains("--porch-session-status") { exit(DesktopHouseInteraction.printSessionStatus()) }
         if CommandLine.arguments.contains("--check-village-plan") {
             guard let file = Bundle.main.resourceURL?.appendingPathComponent("Desktop/assets/village-plan.json"),
-                  let plan = try? VillageComposition.load(from: file), plan.checkGeometry(), PorchTargets.checkLetterRouting() else {
+                  let plan = try? VillageComposition.load(from: file), plan.checkGeometry(),
+                  PorchTargets.checkFinderIconPolicy(), PorchTargets.checkLetterRouting() else {
                 print("FAIL: village placement, hit geometry or widget clearance."); exit(1)
             }
-            print("PASS: 18 cottages on four display shapes, native hit geometry, widget clearance and both file letters.")
+            print("PASS: 18 cottages on four display shapes, Finder visibility settings, native hit geometry, widget clearance and both file letters.")
             exit(0)
         }
         if CommandLine.arguments.contains("--porch-layout-status") {

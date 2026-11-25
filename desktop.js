@@ -132,7 +132,7 @@
     $('#tools').setAttribute('aria-expanded','true');
     $('#village-actions').hidden = Boolean(kind);
     $('#panel-back').hidden = !kind;
-    $('#panel-title').textContent = kind === 'houses' ? 'Folder houses' : kind ? tools[kind] : 'Cabin tools';
+    $('#panel-title').textContent = kind === 'houses' ? 'Folder houses' : kind ? tools[kind] : 'Village menu';
     const body = $('#panel-body');
     if (kind === 'houses') {
       activeTool = kind;
@@ -146,6 +146,7 @@
       cleanupTool = kind === 'radio' ? CabinRadio.mount(body) : SnowApps.open(kind,body);
       $('#panel-back').focus({preventScroll:true});
     } else {
+      panel.dataset.content = 'menu';
       const list = document.createElement('div');
       list.className = 'tool-list';
       for (const [value,label] of Object.entries(tools)) {
@@ -251,7 +252,7 @@
     if (custom !== null && (typeof custom !== 'string' || !custom.startsWith('data:image/jpeg;base64,'))) return;
     const revision = ++imageRevision;
     const replacement = new Image();
-    replacement.src = custom || 'assets/scene.jpg?v=7.1.0';
+    replacement.src = custom || 'assets/scene.jpg?v=8.0.0';
     try {
       await replacement.decode();
       if (revision !== imageRevision) return;

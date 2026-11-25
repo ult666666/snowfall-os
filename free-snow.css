@@ -32,6 +32,23 @@
   animation:free-snow-pack 1.26s ease-out both;
 }
 @keyframes free-snow-pack { from{width:11px;height:4px;opacity:.45} to{width:43px;height:14px;opacity:.85} }
+.snowball-impact {
+  position:absolute; width:44px; height:32px; opacity:0;
+  background:radial-gradient(ellipse at 50% 74%,#fff9eb 0 13%,transparent 15%),
+    radial-gradient(circle at 21% 62%,#fffef7 0 7%,transparent 9%),
+    radial-gradient(circle at 35% 30%,#fff 0 4%,transparent 6%),
+    radial-gradient(circle at 71% 35%,#f3f9ff 0 6%,transparent 8%),
+    radial-gradient(circle at 84% 65%,#fff9ed 0 4%,transparent 6%);
+  filter:drop-shadow(0 1px 1px #62778f88);
+  animation:snowball-splash .4s ease-out .32s both;
+}
+.snowball-impact.hit { width:64px; height:51px; }
+.snowball-impact.still { animation:none; opacity:.9; transform:translate(-50%,-62%); }
+@keyframes snowball-splash {
+  0% { transform:translate(-50%,-48%) scale(.25); opacity:0; }
+  18% { opacity:1; }
+  100% { transform:translate(-50%,-71%) scale(1.22); opacity:0; }
+}
 .free-snow-aim { width:30px; height:13px; border-color:#ab6958; background:#fff7db80; }
 #scene:focus { outline:none; }
 #scene:not(:focus-visible) .free-snow-cursor { display:none; }

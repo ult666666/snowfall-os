@@ -265,7 +265,7 @@ import Carbon
             guard let info = note.userInfo else { return }
             let keys = hitPoint ? ["x","y","window","exposed","passiveExposed"] :
                 ["observing","animatedClicks","located","nativeTargets","localClicks","finderDrawing","feedbackVisible",
-                 "composedFolders","unplacedFolders","widgets","files","letterTargets","civicTargets","deskVisible",
+                 "composedFolders","paintedCottages","unplacedFolders","widgets","files","letterTargets","civicTargets","deskVisible",
                  "playgroundTargets","groundObserving","groundFinderMapped","groundPassiveInputs","groundInputs","groundActive","groundSnowmen","groundFight","groundShots","groundReturns"]
             var filtered: [String: NSNumber] = [:]
             for name in keys { if let value = info[name] as? NSNumber { filtered[name] = value } }

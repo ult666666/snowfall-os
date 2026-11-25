@@ -78,6 +78,19 @@ html[data-surface="wallpaper"] #scene { pointer-events: none; }
 .tool-icon { width: 26px; height: 26px; border-radius: 7px;
   color: #e8f1f9; background: rgb(190 209 226 / 12%); }
 .tool-row [data-icon="forward"] { margin-left: auto; color: #bccbd8; }
+#tools-panel[data-content="menu"] {
+  width:min(292px,calc(100% - 28px)); color:#344344;
+  background:linear-gradient(142deg,#fff7e8,#f4e7d5); border-color:#b7a286;
+  box-shadow:inset 0 1px #fffbed,0 8px 24px #30324635;
+}
+#tools-panel[data-content="menu"] .panel-head { padding:13px 10px 0 17px; }
+#tools-panel[data-content="menu"] h1 { font:650 20px/1.2 Georgia,serif; color:#314650; }
+.menu-gestures { margin:2px 10px 10px; font-size:12px; line-height:1.35; color:#63554a; }
+#tools-panel[data-content="menu"] :is(.icon-control,.tool-row [data-icon="forward"]) { color:#5b6664; }
+#tools-panel[data-content="menu"] .tool-icon { color:#48676a; background:#e4e4d9; }
+#tools-panel[data-content="menu"] :is(button:hover,button:focus-visible) { background:#e7dece; outline-color:#567878; }
+#tools-panel[data-content="menu"] :is(#village-actions,.list-divider,.mac-shortcuts button) { border-color:#c4b8a4; }
+#tools-panel[data-content="menu"] .mac-label { color:#665a49; }
 .tool-row [data-icon="forward"] svg { height: 13px; width: 13px; }
 .list-divider { margin: 6px 8px; border: 0; border-top: 1px solid rgb(217 235 249 / 15%); }
 .mac-shortcuts { display: flex; gap: 5px; padding: 0 8px 7px; }
@@ -191,19 +204,21 @@ html[data-local-village] :is(.room-mode,.yard-active) #wallpaper-cottages { disp
 html[data-local-village] .wallpaper-cottage { pointer-events:auto; cursor:pointer; border-radius:45% 45% 18% 18%; }
 .house-name {
   position:absolute; left:50%; top:86%; transform:translateX(-50%); z-index:2;
-  display:inline-flex; align-items:center; justify-content:center; gap:2px; height:17px;
-  width:max-content; max-width:var(--address-width,100px); padding:0 3px 1px;
-  border:1px solid #455744; border-top-color:#dce4d7; border-radius:3px 4px 3px 2px;
-  background:repeating-linear-gradient(177deg,transparent 0 3px,#65715a5c 4px 4.5px,transparent 5px 7px),
-    linear-gradient(174deg,#52654e,#3b574a 70%,#364e40);
-  box-shadow:inset 0 1px #a6aa82,inset 0 -1px #405241,0 1px 1px #72859466;
-  font:680 11.5px/1 ui-rounded,"Avenir Next",system-ui,sans-serif; color:#fff5da;
-  text-shadow:0 1px #35453888; text-align:center; pointer-events:none;
+  display:inline-flex; align-items:center; justify-content:center; gap:4px; height:19px;
+  width:max-content; max-width:var(--address-width,100px); padding:0 6px 1px;
+  border:1px solid #6c5847; border-top-color:#f0d9b3; border-radius:4px 5px 4px 3px;
+  background:linear-gradient(174deg,#355155,#273b46 75%);
+  box-shadow:inset 0 1px #7f9689,inset 0 -1px #44504f,0 2px 2px #51405d40;
+  font:680 12px/1 ui-rounded,"Avenir Next",system-ui,sans-serif; color:#fff7de;
+  text-shadow:0 1px #25343c; text-align:center; pointer-events:none;
 }
 .house-name::before { content:''; position:absolute; bottom:calc(100% - 1px); left:5%; width:62%; height:2px;
   border-radius:80% 65% 50% 35%; background:linear-gradient(90deg,#e0e7e1,#fff9eb 26% 72%,#e8eadf); }
 .house-name::after { content:''; position:absolute; top:100%; left:15%; right:15%; height:2px;
   border-inline:2px solid #836d50; pointer-events:none; }
+:is(.village-house,.wallpaper-cottage):is(:hover,:focus-visible,.is-identified) .house-name {
+  border-color:#ffe1a3; box-shadow:inset 0 1px #9da38a,0 1px 5px #ecb86b70;
+}
 .address-lettering { display:inline-flex; min-width:0; white-space:nowrap; overflow:hidden; }
 .address-prefix { min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .address-ending { flex:none; }

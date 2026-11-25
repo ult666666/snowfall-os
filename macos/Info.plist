@@ -10,8 +10,8 @@
     <key>CFBundleIdentifier</key><string>com.snowfallos.desktop</string>
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
     <key>CFBundlePackageType</key><string>APPL</string>
-    <key>CFBundleShortVersionString</key><string>7.1.0</string>
-    <key>CFBundleVersion</key><string>10</string>
+    <key>CFBundleShortVersionString</key><string>8.0.0</string>
+    <key>CFBundleVersion</key><string>11</string>
     <key>NSDesktopFolderUsageDescription</key><string>Snowfall places your Desktop folders and loose files in the village. It can style and restore your folder icons when you choose.</string>
     <key>NSAppleEventsUsageDescription</key><string>Snowfall can read Finder desktop icon positions for supported house interactions on additional displays and arranged desktops.</string>
     <key>NSServices</key>

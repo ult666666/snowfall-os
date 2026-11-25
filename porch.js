@@ -52,7 +52,7 @@
   const segments=typeof Intl.Segmenter==='function' ? new Intl.Segmenter(undefined,{granularity:'grapheme'}) : null;
   function facade(node,house) {
     const image = document.createElement('img');
-    image.src='assets/houses/cottage-'+house.variant+'.png?v=7.1.0';
+    image.src='assets/houses/cottage-'+house.variant+'.png?v=8.0.0';
     image.alt='';image.draggable=false;
     const sign=document.createElement('span');sign.className='house-name';
     sign.setAttribute('aria-hidden','true');
@@ -268,7 +268,7 @@
     button.style.top = feet + 'px';
     button.style.setProperty('--figure-width', width + 'px');
     const image = document.createElement('img');
-    image.src = 'assets/props/' + asset + '.png?v=7.1.0';
+    image.src = 'assets/props/' + asset + '.png?v=8.0.0';
     image.className = className;
     image.alt = '';
     image.draggable = false;
@@ -417,7 +417,7 @@
   if(!native) {
     populateSamples();
     // Native plots arrive from the same artwork manifest via snowfall-house-plots.
-    if(location.protocol!=='file:') fetch('assets/village-plan.json?v=7.1.0').then(r=>{
+    if(location.protocol!=='file:') fetch('assets/village-plan.json?v=8.0.0').then(r=>{
       if(!r.ok)throw new Error('Village layout unavailable');return r.json();
     }).then(plan=>{if(Array.isArray(plan.streets)){streets=plan.streets;positionScenery();invalidate();}}).catch(()=>{});
   }

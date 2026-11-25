@@ -11,7 +11,7 @@ import AppKit
         let blocked: [CGRect]
     }
     var surfaces: () -> [Surface] = { [] }
-    var onInput: ((NSNumber, String, CGPoint) -> Void)?
+    var onInput: ((NSNumber, String, CGPoint, TimeInterval?) -> Void)?
     var canReadDesktop: () -> Bool = { false }
     private(set) var passiveInputs = 0
     private(set) var finderMapped = false
@@ -20,7 +20,7 @@ import AppKit
     private var localMouse: Any?
     private var moveMouse: Any?
     private var environmentalObservers: [NSObjectProtocol] = []
-    private var active: (NSNumber, CGPoint)?
+    private var active: (display: NSNumber, point: CGPoint, pressedAt: TimeInterval)?
     private var fighting: Set<NSNumber> = []
     private var lastMove = -Double.infinity
     private var finderUpdated = -Double.infinity
@@ -61,7 +61,7 @@ import AppKit
         globalMouse = nil; localMouse = nil; moveMouse = nil; fighting.removeAll()
     }
     func cancel() {
-        if let (id,p) = active { onInput?(id,"cancel",p) }
+        if let press = active { onInput?(press.display,"cancel",press.point,nil) }
         active = nil
     }
     func setFighting(_ enabled: Bool, display: NSNumber) {
@@ -82,7 +82,7 @@ import AppKit
         let available = surfaces()
         let ids = Set(available.map(\.id))
         for id in Array(receivers.keys) where !ids.contains(id) {
-            if active?.0 == id { cancel() }
+            if active?.display == id { cancel() }
             receivers.removeValue(forKey:id)?.close()
         }
         for surface in available {
@@ -97,7 +97,7 @@ import AppKit
                 self.route(event,at:point) { candidate in
                     guard candidate.id == surface.id else { return false }
                     if event.type == .leftMouseDragged || event.type == .leftMouseUp,
-                       let previous = self.active?.1 {
+                       let previous = self.active?.point {
                         let fix = CGPoint(x:surface.frame.minX+previous.x*surface.frame.width,y:surface.frame.minY+previous.y*surface.frame.height)
                         if hypot(fix.x-point.x,fix.y-point.y)>4 && !testing {
                             let above = NSWindow.windowNumber(at:cocoa,belowWindowWithWindowNumber:0)
@@ -175,14 +175,24 @@ import AppKit
               let raw = row[kCGWindowBounds as String] as? NSDictionary,
               let bounds = CGRect(dictionaryRepresentation:raw as CFDictionary),bounds.contains(point) else { return false }
         let bundle = NSRunningApplication(processIdentifier:pid)?.bundleIdentifier
+        return Self.isBackgroundWindow(bundle:bundle,level:level,bounds:bounds,usable:surface.usable)
+    }
+
+    static func isBackgroundWindow(bundle: String?, level: Int, bounds: CGRect, usable: CGRect) -> Bool {
+        // The wallpaper agent on macOS Tahoe also uses desktopWindow - 2.
+        // A small window at the very same level may be a widget or Dock control.
+        guard bounds.contains(usable.insetBy(dx:2,dy:2)) else { return false }
         let iconLevel = Int(CGWindowLevelForKey(.desktopIconWindow))
-        if level == iconLevel, bundle == "com.apple.finder" || bundle == "com.apple.WindowManager" {
-            // Show Desktop can expose a full-screen WindowManager surface at the
-            // same level as Finder; its smaller desktop modules remain protected.
-            return bounds.contains(surface.usable.insetBy(dx:2,dy:2))
-        }
-        let system = ["com.apple.dock","com.apple.wallpaper.agent","com.apple.WindowManager"].contains(bundle ?? "")
-        return system && level >= Int(CGWindowLevelForKey(.desktopWindow))-1 && level < iconLevel
+        if level == iconLevel { return bundle == "com.apple.finder" || bundle == "com.apple.WindowManager" }
+        let firstWallpaperLevel = Int(CGWindowLevelForKey(.desktopWindow)) - 2
+        return (firstWallpaperLevel..<iconLevel).contains(level)
+            && ["com.apple.dock","com.apple.wallpaper.agent","com.apple.WindowManager"].contains(bundle ?? "")
+    }
+
+    private func clickThrough(_ row: [String:Any]) -> Bool {
+        guard row[kCGWindowOwnerPID as String] as? Int32 == ProcessInfo.processInfo.processIdentifier,
+              let number = row[kCGWindowNumber as String] as? Int else { return false }
+        return NSApp.window(withWindowNumber:number)?.ignoresMouseEvents == true
     }
 
     private func isDesktop(_ event: NSEvent, at point: CGPoint, surface: Surface) -> Bool {
@@ -191,6 +201,10 @@ import AppKit
                       Int64(event.windowNumber)] where n > 0 && n <= Int64(UInt32.max) {
                 if let rows = CGWindowListCopyWindowInfo(.optionIncludingWindow,CGWindowID(n)) as? [[String:Any]],
                    let row = rows.first, row[kCGWindowNumber as String] as? Int64 == n {
+                    // Desktop composition can change between down and up. Quartz
+                    // may name our visible but click-through wallpaper on either
+                    // event; keep looking for the window that actually receives it.
+                    if clickThrough(row) { continue }
                     return desktopOwner(row,point:point,surface:surface)
                 }
             }
@@ -207,9 +221,7 @@ import AppKit
             guard let raw = row[kCGWindowBounds as String] as? NSDictionary,
                   let rect = CGRect(dictionaryRepresentation:raw as CFDictionary), rect.contains(point),
                   (row[kCGWindowAlpha as String] as? Double ?? 1) > 0.01 else { continue }
-            if row[kCGWindowOwnerPID as String] as? Int32 == ProcessInfo.processInfo.processIdentifier,
-               let number = row[kCGWindowNumber as String] as? Int,
-               NSApp.window(withWindowNumber:number)?.ignoresMouseEvents == true { continue }
+            if clickThrough(row) { continue }
             return desktopOwner(row,point:point,surface:surface)
         }
         return false
@@ -295,19 +307,50 @@ import AppKit
         }
         guard event.modifierFlags.intersection([.control,.option,.shift,.command]).isEmpty,
               let surface = surfaces().first(where:{ $0.usable.contains(point) }),
-              active == nil || active?.0 == surface.id,
+              active == nil || active?.display == surface.id,
               kind != .mouseMoved || fighting.contains(surface.id),
               !surface.blocked.contains(where:{ $0.contains(point) }), desktop(surface),
               !surface.finderVisible || outsideFinderItems(point) else { cancel(); return }
         let p = CGPoint(x:(point.x-surface.frame.minX)/surface.frame.width,
                         y:(point.y-surface.frame.minY)/surface.frame.height)
         switch kind {
-        case .leftMouseDown: active = (surface.id,p); gestures += 1; onInput?(surface.id,"down",p)
-        case .leftMouseDragged: active = (surface.id,p); onInput?(surface.id,"move",p)
-        case .mouseMoved: onInput?(surface.id,"move",p)
-        case .leftMouseUp: active = nil; onInput?(surface.id,"up",p)
+        case .leftMouseDown:
+            active = (surface.id,p,event.timestamp)
+            gestures += 1
+            onInput?(surface.id,"down",p,nil)
+        case .leftMouseDragged:
+            active?.point = p
+            onInput?(surface.id,"move",p,nil)
+        case .mouseMoved:
+            onInput?(surface.id,"move",p,nil)
+        case .leftMouseUp:
+            guard let press = active else { return }
+            active = nil
+            onInput?(surface.id,"up",p,max(0,event.timestamp - press.pressedAt))
         default: break
         }
+    }
+
+    /// Feed the passive monitor a hardware-shaped event for a real system
+    /// desktop receiver. This never posts input to Finder or moves the pointer.
+    func checkObservedEvent(_ type: NSEvent.EventType, point: CGPoint, surface: Surface,
+                            timestamp: TimeInterval, clickThroughWindow: NSWindow? = nil) -> Bool {
+        let q = CGPoint(x:surface.frame.minX+point.x*surface.frame.width,
+                        y:surface.frame.minY+point.y*surface.frame.height)
+        let rows = CGWindowListCopyWindowInfo(.optionOnScreenOnly,kCGNullWindowID) as? [[String:Any]] ?? []
+        guard let row = rows.first(where:{desktopOwner($0,point:q,surface:surface)}),
+              let number = row[kCGWindowNumber as String] as? Int,
+              let pid = row[kCGWindowOwnerPID as String] as? Int32,
+              let event = NSEvent.mouseEvent(with:type,location:.zero,modifierFlags:[],timestamp:timestamp,
+                  windowNumber:number,context:nil,eventNumber:0,clickCount:1,pressure:1),
+              let cg = event.cgEvent else {return false}
+        cg.location = q
+        cg.setIntegerValueField(.mouseEventWindowUnderMousePointerThatCanHandleThisEvent,
+                                value:Int64(clickThroughWindow?.windowNumber ?? number))
+        cg.setIntegerValueField(.eventTargetUnixProcessID,value:Int64(pid))
+        guard let reconstructed = NSEvent(cgEvent:cg) else {return false}
+        observe(reconstructed)
+        return true
     }
 
     /// Deliver AppKit mouse events only to this process's isolated test windows.

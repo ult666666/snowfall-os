@@ -4,7 +4,7 @@ An illustrated winter desktop for macOS. Follow the snowy streets to your folder
 
 ![The illustrated sample village with its post office, clock tower and occupied streets](docs/desktop-preview.jpg)
 
-[Download for Mac](https://github.com/ult666666/snowfall-os/releases/latest/download/Snowfall-OS-macOS.zip) · [Explore the sample town](https://ult666666.github.io/snowfall-os/?v=7.1.0)
+[Download for Mac](https://github.com/ult666666/snowfall-os/releases/latest/download/Snowfall-OS-macOS.zip) · [Explore the sample town](https://ult666666.github.io/snowfall-os/?v=8.0.0)
 
 ## Move into the village
 
@@ -39,7 +39,7 @@ The six 256-pixel cottage images are reused at different scales. Snowfall stores
 Try an open patch of the wallpaper, the playable Mac window, or the public sample town. The spot you choose is where the action begins.
 
 - **Hold to pack.** Hold the mouse or trackpad button still as the base, belly and head stack up. Release to leave your snowman there. A short hold leaves a partial build you can finish later. Hold a finished snowman again to brush it away. The village remembers your 12 most recent placements.
-- **Click to throw.** A quick click sends the first snowball. Click a snowman you built to challenge that particular friend. Flurry appears nearby and throws back on his own. Move away from the incoming snowball and click to throw again.
+- **Click to throw.** A quick click sends the first snowball. Click a snowman you built to challenge that particular friend. Flurry appears nearby and throws back on his own. Click Flurry to land your next throw. A puff of powder shows where each throw lands. Move the pointer clear of the incoming snowball to dodge. The first to three hits wins.
 - **Watch the plow.** It drives in from the edge of the scene, clears snow, then leaves again. Planting a snowman can call it out for another pass. Click the left or right half of the moving plow to steer it.
 
 In the playable window and web demo, you can also tab to the landscape, use the arrow keys to pick a spot, and tap or hold Space. The village menu in the upper-right corner opens the guided Snow Yard, folder list, tools, and full-screen view. On the Mac wallpaper, use the snowflake in the menu bar to reach those activities.
@@ -55,7 +55,7 @@ Install Apple’s Command Line Tools, then run these commands from the project f
 open "build/Snowfall OS.app"
 ```
 
-The bundled app works offline. To run its isolated integration check, execute `"build/Snowfall OS.app/Contents/MacOS/SnowfallOS" --smoke-test`. It exercises folder styling and restoration using temporary folders. Use `--check-free-snow` to verify open-ground snowman building and return fire, including the lower foreground. These checks use isolated app data.
+The bundled app works offline. To run its isolated integration check, execute `"build/Snowfall OS.app/Contents/MacOS/SnowfallOS" --smoke-test`. It exercises folder styling and restoration using temporary folders. Use `--check-free-snow` to verify native press and release handling, including a hold that reaches WebKit late. Use `--check-village-plan` to exercise Finder visibility and cottage placement across screen sizes. Run `swift tests/check-wallpaper-art.swift` to compare real WebKit pixels for each roof and nameplate. Pass a built .app path to that command to check its packaged artwork. These checks use isolated app data.
 
 ## Learn how an AI product takes shape
 
@@ -69,3 +69,5 @@ A folder has a persistent identity, a position in the drawing, and an action. Ke
 4. **Test it.** Gather 20 requests and label the intended tool together with their authors. Include requests with no clear match. Compare the proposed guide with a simple keyword rule on the same requests. Count correct suggestions, incorrect suggestions, and cases handed back to the visitor.
 
 For a first code walkthrough, type a sentence into a cabin note and follow its `input` event into local storage. Then find how the timer remembers a deadline across sessions. [Mini-app source](apps.js) · [Native Mac implementation](macos/main.swift)
+
+One bug in this village made that test concrete. The app counted 18 folder targets even when Finder’s full-screen layer hid every cottage sprite. The Mac now checks its desktop visibility settings and separately counts decoded cottage images with visible address signs. For an AI product, use the same distinction when testing a tool call. Verify the result the user can see and act on after the model requests it.
