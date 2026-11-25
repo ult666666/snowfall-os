@@ -1,18 +1,18 @@
 # Snowfall OS
 
-An illustrated winter desktop for macOS. Follow the snowy streets to your folder cottages, pick up a loose file at the post office, or glance at the town clock. The buildings share a ground plane, perspective, and light with the landscape. Three wooden signs in the foreground invite you to build a snowman, challenge Flurry, and drive the little snowplow.
+An illustrated winter desktop for macOS. Follow the snowy streets to your folder cottages, pick up a loose file at the post office, or glance at the town clock. The buildings share a ground plane, perspective, and light with the landscape. Click an open patch to toss a snowball and Flurry will throw one back. Hold still to pack a snowman where your pointer rests. A little plow takes care of the foreground lane.
 
 ![The illustrated sample village with its post office, clock tower and occupied streets](docs/desktop-preview.jpg)
 
-[Download for Mac](https://github.com/ult666666/snowfall-os/releases/latest/download/Snowfall-OS-macOS.zip) · [Explore the sample town](https://ult666666.github.io/snowfall-os/?v=6.0.0)
+[Download for Mac](https://github.com/ult666666/snowfall-os/releases/latest/download/Snowfall-OS-macOS.zip) · [Explore the sample town](https://ult666666.github.io/snowfall-os/?v=7.0.0)
 
 ## Move into the village
 
 On macOS 12 or later, unzip the download and open **Snowfall OS.app**. The app opens your playable village in a normal window. Close the window to leave it running on the wallpaper. Double-click the app or choose **Open Playable Village** from its snowflake menu to bring it forward again. The app is built for Apple silicon and Intel. Its public binary has an ad-hoc signature and has not been notarized by Apple.
 
-If macOS asks for Desktop-folder access, choose **Allow** to connect the real folders and mail. When upgrading a village with folder styling already enabled, the first window may take a moment to appear while macOS waits for that choice.
+If macOS asks for Desktop-folder access, choose **Allow** to connect the real folders and mail. The village opens while macOS checks folder access. Your cottages appear when the folder list arrives.
 
-1. Choose **Folder Houses → Style Desktop Folders as Houses** from the snowflake menu. With desktop items hidden in macOS, the folders take up plots along the painted streets. Hover to read a name, click for a brief snowball exchange, or double-click to open the actual folder. In the playable window a single click also shows **Open folder** and **House widgets**. Its notebook and focus timer belong to the folder. On the wallpaper, right-click the door to reach them.
+1. Choose **Folder Houses → Style Desktop Folders as Houses** from the snowflake menu. With desktop items hidden in macOS, the folders take up plots along the painted streets. Each cottage has a painted address sign with a folder emblem and its name. Hover or focus for a long name, click the cottage or its sign for a brief snowball exchange, or double-click to open the actual folder. In the playable window a single click also shows **Open folder** and **House widgets**. Its notebook and focus timer belong to the folder. On the wallpaper, right-click the door to reach them.
 2. Pick up a letter on the post-office counter to open its file. The two counter spaces favor documents and pictures. Click the building to browse all loose Desktop items, including packages and aliases. The sorting desk can reveal any item in Finder.
 3. Read the tower for local time. Its clock face opens Clock on supported Macs. In the browser you can switch the time format. Snowfall reads device time locally.
 4. If you show existing widgets on the desktop, enable **Frame Desktop Widgets** in the snowflake menu. The artwork follows their bounds and leaves the controls to macOS. Each widget’s app supplies its content and appearance.
@@ -26,15 +26,23 @@ For the composed layout, use **System Settings → Desktop & Dock** to hide Desk
 
 ## How the drawing stays connected to the Mac
 
-The landscape and the native door buttons share one placement plan. Each lot specifies where the front step meets the street and how large the building is at that depth. The Mac projects that plan onto the available display and reserves space for system widgets. Only the painted buildings receive native controls. Finder keeps its own icon positions. On crowded or heavily cropped displays, every folder is also available through **Folder Houses → Open a House…**.
+The landscape and the native door buttons share one placement plan. Each lot specifies where the front step meets the street and how large the building is at that depth. The Mac projects that plan onto the available display and reserves space for system widgets. Doors, letters, and the signed games have their own controls. Open ground accepts snow gestures. Finder keeps its own icon positions. On crowded or heavily cropped displays, every folder is also available through **Folder Houses → Open a House…**.
 
 The post office watches the Desktop directory for changes. On a click, it checks that the item still has the expected identity before opening or revealing it. The still wallpaper stores the buildings and pieces of mail without filenames. The public website uses twelve fictional folders and three sample pieces of mail. [Placement plan](assets/village-plan.json) · [Native placement](macos/VillageComposition.swift) · [Local file handling](macos/PostOffice.swift)
+
+![Two handmade snowmen beside the painted signs for Sketchbook, Letters, Studio and Workshop](docs/cottages-and-snowmen.jpg)
 
 The six 256-pixel cottage images are reused at different scales. Snowfall stores a compact Finder icon for each styled folder, plus a local backup of its previous icon when needed. The desktop picture cache reuses two JPEG slots per display. Snow and music run locally.
 
 ## Snow play
 
-The snowfield is playable on the exposed wallpaper, in the Mac window, and in the public sample town.
+Try an open patch of the wallpaper, the playable Mac window, or the public sample town. The spot you choose is where the action begins.
+
+- **Hold to pack.** Hold the mouse or trackpad button still as the base, belly and head stack up. Release to leave your snowman there. A short hold leaves a partial build you can finish later. Hold a finished snowman again to brush it away. The village remembers your 12 most recent placements.
+- **Click to throw.** A quick click sends the first snowball. Click a snowman you built to challenge that particular friend. Flurry appears nearby and throws back on his own. Move away from the incoming snowball and click to throw again.
+- **Watch the plow.** It leaves its parking spot, pushes snow to the side and backs along its tracks. Planting a snowman can call it out for another pass.
+
+In the playable window and web demo, you can also tab to the landscape, use the arrow keys to pick a spot, and tap or hold Space. The signs in the foreground open the three guided activities.
 
 ![The snowball pile, Flurry and the little plow with their three wooden activity signs](docs/snowfield.jpg)
 
@@ -42,7 +50,7 @@ The snowfield is playable on the exposed wallpaper, in the Mac window, and in th
 - **Snowball fight** starts a first-to-three match. Click Flurry to throw. When he winds up, move to a different lane with **Dodge left** or **Dodge right**.
 - **Drive plow** lets you drag the little truck toward either bank or click a bank to clear its path. **Fresh snow** starts a new route.
 
-**Back** brings back the three activity signs. **Play in snow** opens the larger Snow Yard with keyboard controls. On the real desktop, ordinary app windows sit above the village. The game catches clicks only on its painted targets and leaves the surrounding desktop available.
+**Back** brings back the three activity signs. **Play in snow** opens the larger Snow Yard with keyboard controls. On the real desktop, ordinary app windows sit above the village. Cottage doors, the post office, and Mac windows keep their usual click actions.
 
 The browser preview uses fictional sample folders. It runs the same widget and game code and stores sample notes locally. Finder integration, desktop widget frames, and system wallpaper changes are available in the Mac app.
 
@@ -55,11 +63,11 @@ Install Apple’s Command Line Tools, then run these commands from the project f
 open "build/Snowfall OS.app"
 ```
 
-The bundled app works offline. To run its isolated integration check, execute `"build/Snowfall OS.app/Contents/MacOS/SnowfallOS" --smoke-test`. It exercises folder styling and restoration using temporary folders. Run the bundled executable with `--check-playground` to test on-wallpaper build, throw, dodge, and plow inputs against the rendered game. Both checks use isolated app data.
+The bundled app works offline. To run its isolated integration check, execute `"build/Snowfall OS.app/Contents/MacOS/SnowfallOS" --smoke-test`. It exercises folder styling and restoration using temporary folders. Run the bundled executable with `--check-playground` to test on-wallpaper build, throw, dodge, and plow inputs against the rendered game. Use `--check-free-snow` for open-ground gestures. These checks use isolated app data.
 
 ## Learn how an AI product takes shape
 
-A folder has a persistent identity, a position in the drawing, and an action. Keeping these separate lets the art change while the same door continues to open the right files. This principle also applies to an AI assistant that suggests which folder to open. Its suggestion can refer to an item ID, and native code can check that ID before doing anything. The clock, file handling and snowball game all run locally with zero model calls. A practical product test is to hand someone the village without instructions and see whether they can find the plow, clear a bank, and tell it worked. The same test can catch discoverability problems in an AI-powered product. [Door controls](macos/PorchTargets.swift) · [Snowball exchange](porch.js) · [Full snow yard](yard.js)
+A folder has a persistent identity, a position in the drawing, and an action. Keeping these separate lets the art change while the same door continues to open the right files. This principle also applies to an AI assistant that suggests which folder to open. Its suggestion can refer to an item ID, and native code can check that ID before doing anything. The clock, file handling and snowball game all run locally with zero model calls. A practical product test is to hand someone the village without instructions and see whether they can identify their folder, grow a snowman beside it, and get that same snowman to throw back. The address sign, the growing body, and the incoming snowball each make a different action visible. The same test can catch discoverability problems in an AI-powered product. [Door controls](macos/PorchTargets.swift) · [Snowball exchange](porch.js) · [Full snow yard](yard.js)
 
 **Try a design exercise.** A visitor writes “I have half an hour to finish my sketch” but doesn’t know which tool to open. How could a future guide help?
 

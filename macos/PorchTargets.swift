@@ -23,6 +23,7 @@ import AppKit
         var target: CGRect {
             if let paintedBounds { return paintedBounds }
             let s = plot.size
+            if drawHouse { return VillageComposition.cottageBounds(center: plot.center, size: s, viewportWidth: plot.frame.width) }
             return CGRect(x: plot.center.x - s / 2, y: plot.center.y - s / 2, width: s, height: s)
         }
     }
@@ -309,7 +310,16 @@ import AppKit
     }
 
     private final class DoorButton: NSView, NSDraggingSource {
-        var door: Door?
+        var door: Door? {
+            didSet { if oldValue != door { needsDisplay = true } }
+        }
+        override func draw(_ dirtyRect: NSRect) {
+            super.draw(dirtyRect)
+            guard let door, !door.drawHouse, door.folder != nil,
+                  let ctx = NSGraphicsContext.current?.cgContext else { return }
+            let scale = max(0.75, min(1.05, door.plot.size/80))
+            VillageStill.drawFolderMarker(ctx, at:CGPoint(x:bounds.maxX-12*scale, y:12*scale), scale:scale)
+        }
         var onTap: (() -> Void)?
         var onOpen: (() -> Void)?
         var onRoom: (() -> Void)?

@@ -30,6 +30,24 @@ struct VillageStill {
               let image = CGImageSourceCreateImageAtIndex(source,0,nil) else { throw CocoaError(.fileReadCorruptFile) }
         return image
     }
+    /// Shared by the private still image and Finder's live folder icons.
+    /// A small folder emblem identifies the building without embedding its name.
+    static func drawFolderMarker(_ ctx: CGContext, at feet: CGPoint, scale: CGFloat) {
+        ctx.saveGState()
+        ctx.translateBy(x: feet.x, y: feet.y)
+        ctx.scaleBy(x: scale, y: scale)
+        ctx.setFillColor(red:0.46, green:0.34, blue:0.25, alpha:1)
+        ctx.fill(CGRect(x:-7, y:-12, width:2, height:7))
+        ctx.fill(CGRect(x:5, y:-12, width:2, height:7))
+        let sign = CGPath(roundedRect:CGRect(x:-11, y:-9, width:22, height:12), cornerWidth:2, cornerHeight:2, transform:nil)
+        ctx.setFillColor(red:0.19, green:0.34, blue:0.30, alpha:1)
+        ctx.addPath(sign); ctx.fillPath()
+        ctx.setFillColor(red:1.0, green:0.83, blue:0.49, alpha:1)
+        ctx.fill(CGRect(x:-4.5, y:-5.5, width:9, height:5))
+        ctx.fill(CGRect(x:-4.5, y:-1, width:3.5, height:1.8))
+        ctx.restoreGState()
+    }
+
     static func render(_ scene: Scene, source: URL) throws -> Data {
         let frame = CGRect(origin: .zero, size: scene.size)
         let ratio = min(2, 2560 / max(frame.width,frame.height))
@@ -61,6 +79,7 @@ struct VillageStill {
             if let sprite = sprites[house.variant] {
                 ctx.draw(sprite,in:flipped(CGRect(x:cx-side/2,y:feet-side*0.88,width:side,height:side)))
             }
+            drawFolderMarker(ctx, at:CGPoint(x:cx, y:frame.height-feet), scale:max(0.85, min(1.24, side/82)))
         }
         for (index,kind) in scene.mail.prefix(2).enumerated() {
             let office = art.postOffice

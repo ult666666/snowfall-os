@@ -40,7 +40,7 @@
   }
   function sprite(name) {
     const img = element('img', 'yard-sprite');
-    img.src = sprites + name + '.png?v=6.0.0';
+    img.src = sprites + name + '.png?v=7.0.0';
     img.alt = '';
     img.draggable = false;
     return img;

@@ -1,0 +1,50 @@
+#free-snow { position:absolute; inset:0; z-index:2; overflow:hidden; pointer-events:none; user-select:none; -webkit-user-select:none; }
+#free-snow *, .free-snow-hint { pointer-events:none; }
+:is(.custom-image,.yard-active,.room-mode) #free-snow { display:none; }
+.free-snow-figure {
+  position:absolute; width:var(--figure-size); height:var(--figure-size);
+  transform:translate(calc(-50% + var(--lean-x,0px)),calc(-100% + var(--lean-y,0px)));
+}
+.free-snow-figure::before {
+  content:''; position:absolute; left:9%; width:85%; bottom:0; height:13%;
+  border-radius:50%; transform:rotate(-5deg);
+  background:radial-gradient(ellipse at center,#8293a96e 7%,#94a4b444 45%,transparent 72%);
+}
+.free-snow-figure img { display:block; position:relative; width:100%; height:100%; object-fit:contain; object-position:bottom; }
+.free-snow-growing img { animation:free-snow-settle .34s ease-out; transform-origin:center bottom; }
+.free-snow-rival img { animation:free-snow-hello .6s ease-out; transform-origin:50% 95%; }
+@keyframes free-snow-settle { from{opacity:.6;transform:scale(.82,.7)} 65%{transform:scale(1.04,1.05)} }
+@keyframes free-snow-hello { from{transform:translateY(6px) scale(.89) rotate(-7deg)} 66%{transform:rotate(3deg)} }
+.free-snow-ball { position:absolute; left:0; top:0; width:clamp(14px,1.35vw,23px); filter:drop-shadow(0 2px 1px #758da645); }
+.free-snow-caption, .free-snow-hint {
+  position:absolute; width:max-content; max-width:calc(100vw - 16px); text-align:center;
+  font:630 clamp(11px,.89vw,14px)/1.28 ui-rounded,'Avenir Next',system-ui,sans-serif;
+  color:#394e52; background:#fffaebf2; border:1px solid #ad9e84; border-radius:9px 11px 9px 5px;
+  box-shadow:0 2px 4px #5f748833; padding:3px 9px 4px;
+}
+.free-snow-caption { transform:translate(-50%,-100%); }
+.free-snow-hint {
+  left:50%; top:0; transform:translate(-50%,-115%); z-index:2; white-space:nowrap;
+  border:0; border-radius:10px; background:#f5f5e9e0; padding:3px 9px; font-weight:580;
+  color:#40565a; box-shadow:0 1px 3px #69839a30;
+}
+#snow-playground[data-mode]:not([data-mode="idle"]) .free-snow-hint,
+#snow-playground:has(.meadow-note:not([hidden])) .free-snow-hint { visibility:hidden; }
+.free-snow-cursor, .free-snow-aim {
+  display:block; position:absolute; width:34px; height:15px; transform:translate(-50%,-50%) rotate(-6deg);
+  border-radius:50%; border:2px dashed #598296; background:#faffff60; box-shadow:0 1px 2px #566c8040;
+}
+.free-snow-packing {
+  position:absolute; width:32px; height:10px; border:1.5px solid #eaf5f8; border-radius:50%;
+  transform:translate(-50%,-50%) rotate(-8deg); box-shadow:0 1px 1px #879eaf8c,inset 0 1px 2px #9bafbd77;
+  animation:free-snow-pack 1.26s ease-out both;
+}
+@keyframes free-snow-pack { from{width:11px;height:4px;opacity:.45} to{width:43px;height:14px;opacity:.85} }
+.free-snow-aim { width:30px; height:13px; border-color:#ab6958; background:#fff7db80; }
+#scene:focus { outline:none; }
+#scene:not(:focus-visible) .free-snow-cursor { display:none; }
+#scene:focus-visible .free-snow-hint { visibility:visible; }
+#scene:focus-visible .free-snow-hint::after { content:' · Arrows to move, Space to play'; }
+@media(max-width:550px) {
+  #scene:focus-visible .free-snow-hint { white-space:normal; max-width:90vw; }
+}

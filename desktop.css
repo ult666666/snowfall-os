@@ -108,7 +108,7 @@ html[data-surface="wallpaper"] #scene { pointer-events: none; }
   .done { top: 10px; right: 10px; }
 }
 
-/* Each facade sits on its painted parcel. Its name appears when someone approaches the door. */
+/* Doorstep addresses belong to the painted street and remain legible at rest. */
 #widget-eaves, #demo-village { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
 #widget-eaves { z-index:0; }
 #demo-village { z-index:2; }
@@ -119,7 +119,7 @@ html[data-surface="wallpaper"] #demo-village, .yard-active #demo-village { displ
 }
 .village-house { pointer-events:auto; touch-action:manipulation; border-radius:45% 45% 23% 23%; }
 :is(.village-house,.wallpaper-cottage) img { display:block; width:100%; height:auto; pointer-events:none; }
-:is(.village-house,.wallpaper-cottage) .house-name, .clock-almanac {
+.clock-almanac {
   position:absolute; z-index:1; left:50%; top:87%; transform:translate(-50%,-2px);
   width:max-content; max-width:min(20em,83vw); margin:0; padding:4px 8px 5px;
   color:#453b31; background:linear-gradient(175deg,#fff4d9,#ead5b4); border:1px solid #93795f;
@@ -127,7 +127,6 @@ html[data-surface="wallpaper"] #demo-village, .yard-active #demo-village { displ
   overflow-wrap:anywhere; font:600 clamp(10px,.76vw,13px)/1.22 ui-rounded,"Avenir Next",system-ui,sans-serif;
   pointer-events:none; text-align:center;
 }
-.village-house:is(:hover,:focus-visible) .house-name,.wallpaper-cottage.is-identified .house-name,
 #village-clock:is(:focus-visible,:hover,.show-time) .clock-almanac { opacity:1; transform:translate(-50%,1px); }
 #village-clock { position:absolute; z-index:2; padding:0; aspect-ratio:1; transform:translate(-50%,-50%);
   border:0; border-radius:50%; background:none; pointer-events:auto; touch-action:manipulation; }
@@ -209,15 +208,43 @@ html:not([data-surface="wallpaper"]) #wallpaper-cottages { display:none; }
 html[data-local-village] #wallpaper-cottages { display:block; }
 html[data-local-village] :is(.room-mode,.yard-active) #wallpaper-cottages { display:none; }
 html[data-local-village] .wallpaper-cottage { pointer-events:auto; cursor:pointer; border-radius:45% 45% 18% 18%; }
-html[data-local-village] .wallpaper-cottage:is(:hover,:focus-visible) .house-name {
-  opacity:1; transform:translate(-50%,1px);
+.house-name {
+  position:absolute; left:50%; top:86%; transform:translateX(-50%); z-index:2;
+  display:inline-flex; align-items:center; justify-content:center; gap:2px; height:17px;
+  width:max-content; max-width:var(--address-width,100px); padding:0 3px 1px;
+  border:1px solid #455744; border-top-color:#dce4d7; border-radius:3px 4px 3px 2px;
+  background:repeating-linear-gradient(177deg,transparent 0 3px,#65715a5c 4px 4.5px,transparent 5px 7px),
+    linear-gradient(174deg,#52654e,#3b574a 70%,#364e40);
+  box-shadow:inset 0 1px #a6aa82,inset 0 -1px #405241,0 1px 1px #72859466;
+  font:680 11.5px/1 ui-rounded,"Avenir Next",system-ui,sans-serif; color:#fff5da;
+  text-shadow:0 1px #35453888; text-align:center; pointer-events:none;
 }
-.house-name small { display:block; font:500 10px/1.4 system-ui,sans-serif; color:#624b39; white-space:nowrap; }
+.house-name::before { content:''; position:absolute; bottom:calc(100% - 1px); left:5%; width:62%; height:2px;
+  border-radius:80% 65% 50% 35%; background:linear-gradient(90deg,#e0e7e1,#fff9eb 26% 72%,#e8eadf); }
+.house-name::after { content:''; position:absolute; top:100%; left:15%; right:15%; height:2px;
+  border-inline:2px solid #836d50; pointer-events:none; }
+.address-lettering { display:inline-flex; min-width:0; white-space:nowrap; overflow:hidden; }
+.address-prefix { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.address-ending { flex:none; }
+.address-folder { position:relative; flex:0 0 9px; width:9px; height:6px; border:1px solid #9b8054; border-radius:1px 2px 1px 1px;
+  background:linear-gradient(#f6cf83,#e8b75e); box-shadow:0 1px #37463755; }
+.address-folder:before { content:''; position:absolute; width:4px; height:2px; left:-1px; top:-3px;
+  background:#e7b967; border-radius:1px 1px 0 0; }
+button:is(.village-house,.wallpaper-cottage) .house-name { pointer-events:auto; }
+.house-door-guide { position:absolute; left:calc(50% + var(--guide-shift,0px)); bottom:98%; transform:translateX(-50%);
+  width:max-content; max-width:min(252px,calc(100vw - 12px)); padding:4px 8px 5px; display:none; pointer-events:none;
+  border:1px solid #927958; border-radius:4px; box-shadow:0 2px 5px #4e534733; background:#fff3d8f7;
+  text-align:center; font:650 12px/1.25 ui-rounded,"Avenir Next",system-ui,sans-serif; color:#3c493b; overflow-wrap:anywhere;
+}
+.house-door-guide strong,.house-door-guide small { display:block; }
+.house-door-guide small { font:500 10px/1.4 system-ui,sans-serif; color:#62533f; }
+:is(.village-house,.wallpaper-cottage):is(:hover,:focus-visible,.is-identified) { z-index:10000!important; }
+#scene:not(.door-actions-open) :is(.village-house,.wallpaper-cottage):is(:hover,:focus-visible,.is-identified) .house-door-guide { display:block; }
 .door-actions { position:absolute; transform:translateX(-50%); z-index:7; max-width:calc(100vw - 12px);
   display:grid; grid-template-columns:1fr 1fr; gap:3px 4px; padding:6px 8px;
   color:#3d382c; background:#f8e8c7; border:1px solid #987858; border-radius:5px;
   box-shadow:0 2px 5px #384a5736; }
-.door-actions strong { grid-column:span 2; max-width:210px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+.door-actions strong { grid-column:span 2; max-width:220px; white-space:normal; overflow-wrap:anywhere;
   text-align:center; font:600 12px/1.3 system-ui; }
 .door-actions button { border:1px solid #baa581; padding:4px 6px; border-radius:4px; color:#414834; background:#fbf3df;
   font:600 11px/1.3 system-ui; }

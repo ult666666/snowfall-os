@@ -49,19 +49,46 @@
     return {id:button.dataset.sample, variant:Number(button.dataset.variant),x:(box.left+box.width/2)/innerWidth,
       y:(box.top+box.height*.88)/innerHeight,size:box.width};
   }
+  const segments=typeof Intl.Segmenter==='function' ? new Intl.Segmenter(undefined,{granularity:'grapheme'}) : null;
   function facade(node,house) {
     const image = document.createElement('img');
-    image.src='assets/houses/cottage-'+house.variant+'.png?v=6.0.0';
+    image.src='assets/houses/cottage-'+house.variant+'.png?v=7.0.0';
     image.alt='';image.draggable=false;
-    const sign=document.createElement('span');sign.className='house-name';sign.textContent=house.name;
-    const hint=document.createElement('small');
-    hint.textContent=native ? 'Click to play · Double-click to open' : 'Click to play · Double-click for widgets';
-    sign.append(hint);
-    node.append(image,sign);
+    const sign=document.createElement('span');sign.className='house-name';
+    sign.setAttribute('aria-hidden','true');
+    const folder=document.createElement('i');folder.className='address-folder';
+    const address=document.createElement('span');address.className='address-lettering';
+    // Keep distinguishing suffixes such as a year when the physical sign is short.
+    const letters=segments ? Array.from(segments.segment(house.name),part=>part.segment) : Array.from(house.name);
+    const lastWord=house.name.match(/[\p{L}\p{N}]+$/u)?.[0] || '';
+    const endsInYear=letters.length>6 && /(?:19|20)\d{2}$/.test(house.name);
+    const tail=endsInYear ? 4 : letters.length>10 ? Math.max(3,Math.min(5,Array.from(lastWord).length || 4)) : 0;
+    const prefix=document.createElement('span');prefix.className='address-prefix';
+    prefix.textContent=letters.slice(0,letters.length-tail).join('');address.append(prefix);
+    if (tail) {
+      const ending=document.createElement('span');ending.className='address-ending';
+      ending.textContent=letters.slice(-tail).join('');address.append(ending);
+    }
+    sign.append(folder,address);
+    const guide=document.createElement('span');guide.className='house-door-guide';
+    guide.setAttribute('aria-hidden','true');
+    const fullName=document.createElement('strong');fullName.textContent=house.name;
+    const action=document.createElement('small');
+    action.textContent=native ? 'Double-click to open · Click to play' : 'Click to play · Double-click for widgets';
+    guide.append(fullName,action);
+    node.append(image,sign,guide);
   }
   function place(node,x,y,size) {
     node.style.left=x+'px';node.style.top=y+'px';node.style.width=size+'px';
     node.style.zIndex=String(Math.round(y));
+    // The address stays centred on its doorstep, including lots at the screen edge.
+    const roomAtFeet=Math.max(22,2*Math.min(x-2,innerWidth-x-2));
+    const plaque=innerWidth>=1000 ? Math.min(158,Math.max(106,size+28),roomAtFeet) :
+      Math.min(132,Math.max(78,size+14),roomAtFeet);
+    node.style.setProperty('--address-width',plaque+'px');
+    const guideRoom=Math.min(252,innerWidth-12);
+    const guideCenter=minmax(x,guideRoom/2+5,innerWidth-guideRoom/2-5);
+    node.style.setProperty('--guide-shift',(guideCenter-x)+'px');
   }
   function identify(id) {
     hoveredId=id;
@@ -80,6 +107,7 @@
 
   function closeDoorActions() {
     houseActions.hidden = true;
+    scene.classList.remove('door-actions-open');
     houseActions.replaceChildren();
   }
   function offerDoor(plot) {
@@ -101,6 +129,7 @@
     });
     houseActions.replaceChildren(name, open, room);
     houseActions.hidden = false;
+    scene.classList.add('door-actions-open');
     const side = houseActions.offsetWidth / 2;
     houseActions.style.left = Math.max(side+6,Math.min(innerWidth-side-6,plot.x*innerWidth))+'px';
     const roof = plot.y*innerHeight-plot.size*.89;
@@ -239,7 +268,7 @@
     button.style.top = feet + 'px';
     button.style.setProperty('--figure-width', width + 'px');
     const image = document.createElement('img');
-    image.src = 'assets/props/' + asset + '.png?v=6.0.0';
+    image.src = 'assets/props/' + asset + '.png?v=7.0.0';
     image.className = className;
     image.alt = '';
     image.draggable = false;
@@ -388,7 +417,7 @@
   if(!native) {
     populateSamples();
     // Native plots arrive from the same artwork manifest via snowfall-house-plots.
-    if(location.protocol!=='file:') fetch('assets/village-plan.json?v=6.0.0').then(r=>{
+    if(location.protocol!=='file:') fetch('assets/village-plan.json?v=7.0.0').then(r=>{
       if(!r.ok)throw new Error('Village layout unavailable');return r.json();
     }).then(plan=>{if(Array.isArray(plan.streets)){streets=plan.streets;positionScenery();invalidate();}}).catch(()=>{});
   }

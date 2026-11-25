@@ -260,7 +260,7 @@
     const tooSmall=site && (site.width*w<205 || site.height*h<65);
     field.hidden=Boolean(hide||tooSmall);
     scene.classList.toggle('has-meadow',!field.hidden);
-    const small=w<750;
+    const small=w<1040;
     const fieldW=Math.min(w-20,clamp(w*.36,304,465));
     const fieldH=Math.min(clamp(h*.128,90,123),h*.33);
     let rect={x:(w-fieldW)/2,y:h-fieldH-(small?70:10),w:fieldW,h:fieldH};

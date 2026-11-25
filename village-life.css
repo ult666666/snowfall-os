@@ -1,0 +1,20 @@
+#village-life { position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none; user-select:none; }
+.plow-rig { position:absolute; transform-origin:50% 100%; }
+.plow-body,.plow-paint { width:100%; height:100%; }
+.plow-body { position:relative; }
+.plow-paint { display:block; }
+.plow-away[data-mode="idle"] [data-art="truck"] .main-sprite { opacity:0; }
+.plow-track { position:absolute; height:5px; transform-origin:0 50%; }
+.plow-tread { display:block; width:100%; height:100%; transform-origin:0 50%; border-radius:40%;
+  background:repeating-linear-gradient(104deg,#9596a14d 0 1px,transparent 1px 4px),linear-gradient(#9298a94d,#e5e6e599 43% 68%,#969daa70);
+  box-shadow:0 1px 1px #fff6dfab; }
+.plow-windrow { position:absolute; height:auto; transform-origin:50% 90%; }
+.plow-spray { position:absolute; left:90%; bottom:18%; width:15%; height:20%; }
+.plow-spray i { position:absolute; left:0; bottom:0; width:38%; aspect-ratio:1; border-radius:60%;
+  background:#fafafa; box-shadow:0 1px 1px #b8ccd4; animation:plow-powder .65s ease-out infinite; }
+.plow-spray i:nth-child(2) { width:24%; animation-delay:-.22s; }
+.plow-spray i:nth-child(3) { width:35%; animation-delay:-.44s; }
+@keyframes plow-powder { from {opacity:0;transform:translate(0,0) scale(.5)}
+  25% {opacity:.85} to {opacity:0;transform:translate(190%,-115%) scale(.6)} }
+@media (prefers-reduced-motion:reduce) { #village-life { display:none; } }
+.reduce-motion #village-life { display:none; }

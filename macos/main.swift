@@ -4,7 +4,8 @@ import UniformTypeIdentifiers
 
 private let appName = "Snowfall OS"
 private let playgroundCheck = CommandLine.arguments.contains("--check-playground")
-private let smokeTest = CommandLine.arguments.contains("--smoke-test") || playgroundCheck
+private let freeSnowCheck = CommandLine.arguments.contains("--check-free-snow")
+private let smokeTest = CommandLine.arguments.contains("--smoke-test") || playgroundCheck || freeSnowCheck
 private let snowPreference = "SnowOnAppWindows"
 private let framesPreference = "FrameDesktopWidgets"
 
@@ -30,6 +31,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private var preview: NSWindow?
     private var previewView: WKWebView?
     private var previewReady = false
+    private var previewGroundKey: String?
     private var previewResize: DispatchWorkItem?
     private var desiredRoute: Route = .scene
     private var routeRevision = 0
@@ -40,9 +42,12 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private var localPorchClicks = 0
     private let doors = PorchTargets()
     private let playground = PlaygroundTargets()
+    private let ground = GroundInteraction()
+    private var groundStates: [NSNumber: [String:Any]] = [:]
     private var fightClock: Timer?
     private let postOffice = VillagePostOffice()
     private var hasFileIndex = false
+    private var mailRequestedWhileLoading = false
     private var ending = false
     private var pendingPictures: [NSNumber: DispatchWorkItem] = [:]
     private lazy var doorstep = DoorstepFeedback(assets:webRoot.appendingPathComponent("assets", isDirectory:true))
@@ -91,6 +96,15 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         }
         doors.onVisibility = { [weak self] in self?.sendAllPlots() }
         doorstep.occupiedDoorFrames = { [weak self] in (self?.doors.occupiedFrames ?? []) + (self?.playground.frames ?? []) }
+        ground.canReadDesktop = { [weak self] in self?.rooms.model.enabled == true && self?.rooms.canCompose == true }
+        ground.surfaces = { [weak self] in self?.groundSurfaces() ?? [] }
+        ground.onInput = { [weak self] id, phase, point in
+            guard let surface = self?.backgrounds[id], surface.ready else { return }
+            let input: [String:Any] = ["phase":phase,"x":point.x,"y":point.y]
+            surface.view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-ground-input',{detail:input}));",
+                arguments:["input":input],in:nil,in:.page)
+        }
+        if !smokeTest { ground.start() }
         playground.onInput = { [weak self] display, id, phase, point in
             guard let self, let surface = self.backgrounds[display], surface.ready else { return }
             let detail: [String:Any] = ["id":id, "phase":phase, "x":point.x, "y":point.y]
@@ -182,7 +196,12 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         rooms.sendState = { [weak self] state in
             guard let self else { return }
             if !smokeTest {
-                if self.rooms.model.enabled { self.startFileIndex() }
+                if self.rooms.model.enabled && self.rooms.canCompose { self.startFileIndex() }
+                if self.mailRequestedWhileLoading && !self.rooms.waitingForAccess {
+                    self.mailRequestedWhileLoading = false
+                    if state["error"] == nil { self.showPostOffice(nil) }
+                    else if let message = state["error"] as? String { self.tellUser(message) }
+                }
                 self.porches.setHouses(self.rooms.model.houses)
                 self.syncPorchTargets()
             }
@@ -427,6 +446,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
     @objc private func showPostOffice(_ sender: Any?) {
         guard !smokeTest else { return }
+        if rooms.waitingForAccess { mailRequestedWhileLoading = true; return }
         startFileIndex()
         postOffice.showDesk()
     }
@@ -461,7 +481,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         }
         let files = villageFiles
         let widgetSkin = UserDefaults.standard.bool(forKey: framesPreference) ? cachedFrames[display] ?? [] : []
-        let snapshot: [String: Any] = ["houses": plots, "files": files, "widgetFrames": widgetSkin]
+        let snapshot: [String: Any] = ["houses": plots, "files": files, "widgetFrames": widgetSkin, "inventoryReady": rooms.canCompose]
         let signature = try? JSONSerialization.data(withJSONObject: snapshot, options: .sortedKeys)
         if let signature, backgrounds[display]?.villageSignature == signature { return }
         backgrounds[display]?.villageSignature = signature
@@ -469,7 +489,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
                                  arguments: ["plots": plots], in: nil, in: .page)
         sendFiles(to: view)
         pendingPictures.removeValue(forKey: display)?.cancel()
-        guard !smokeTest, picture.dataURL == nil, systemPicture.hasBackup else { return }
+        guard !smokeTest, rooms.canCompose, picture.dataURL == nil, systemPicture.hasBackup else { return }
         let kinds = villageFiles.compactMap { $0["kind"] }
         let update = DispatchWorkItem { [weak self] in
             guard let self, let screen = NSScreen.screens.first(where: { self.screenID($0) == display }) else { return }
@@ -492,20 +512,49 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         }
     }
 
+    private func groundSurfaces() -> [GroundInteraction.Surface] {
+        guard picture.dataURL == nil else { return [] }
+        return NSScreen.screens.compactMap { screen in
+            guard let id = screenID(screen), backgrounds[id]?.ready == true,
+                  groundStates[id]?["groundActive"] as? Bool == true else { return nil }
+            let full = CGDisplayBounds(id.uint32Value), cocoa = screen.frame
+            func quartz(_ r: CGRect) -> CGRect {
+                CGRect(x:full.minX+(r.minX-cocoa.minX)*full.width/cocoa.width,
+                       y:full.minY+(cocoa.maxY-r.maxY)*full.height/cocoa.height,
+                       width:r.width*full.width/cocoa.width,height:r.height*full.height/cocoa.height)
+            }
+            var blocked = (doors.occupiedFrames + playground.frames).filter(cocoa.intersects).map(quartz)
+            blocked += (cachedFrames[id] ?? []).compactMap { r in
+                guard let x=r["x"], let y=r["y"], let w=r["width"], let h=r["height"] else { return nil }
+                return CGRect(x:full.minX+x*full.width,y:full.minY+y*full.height,width:w*full.width,height:h*full.height)
+            }
+            return GroundInteraction.Surface(id:id,frame:full,usable:quartz(screen.visibleFrame),
+                finderVisible:doors.finderDisplays.contains(id.uint32Value),blocked:blocked)
+        }
+    }
+
+    private func groundClockActive(_ display: NSNumber) -> Bool {
+        let state = groundStates[display]
+        return state?["holding"] as? Bool == true || state?["fightActive"] as? Bool == true
+    }
     private func syncFightClock() {
-        let playing = backgrounds.keys.contains { playground.state(on:$0)["mode"] as? String == "fight" }
+        let playing = backgrounds.keys.contains { playground.state(on:$0)["mode"] as? String == "fight" || groundClockActive($0) }
         if !playing {
             fightClock?.invalidate()
             fightClock = nil
         } else if fightClock == nil {
             // WebKit throttles a partly covered wallpaper. Wake it only during
             // a short round so Flurry can throw back at the visible player.
-            let timer = Timer(timeInterval:0.2, repeats:true) { [weak self] _ in
+            let timer = Timer(timeInterval:0.1, repeats:true) { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
-                    for (display,surface) in self.backgrounds where surface.ready &&
-                        self.playground.state(on:display)["mode"] as? String == "fight" {
-                        surface.view.evaluateJavaScript("window.dispatchEvent(new Event('snowfall-playground-clock'));",completionHandler:nil)
+                    for (display,surface) in self.backgrounds where surface.ready {
+                        if self.playground.state(on:display)["mode"] as? String == "fight" {
+                            surface.view.evaluateJavaScript("window.dispatchEvent(new Event('snowfall-playground-clock'));",completionHandler:nil)
+                        }
+                        if self.groundClockActive(display) {
+                            surface.view.evaluateJavaScript("window.dispatchEvent(new Event('snowfall-ground-clock'));",completionHandler:nil)
+                        }
                     }
                     self.syncFightClock()
                 }
@@ -519,6 +568,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private func sendPlaygroundSite(display: NSNumber, force: Bool = false) {
         guard let surface = backgrounds[display], surface.ready,
               let screen = NSScreen.screens.first(where:{ screenID($0) == display }) else { return }
+        if !smokeTest || freeSnowCheck { ground.syncReceivers(testing:smokeTest) }
         let frame = CGDisplayBounds(display.uint32Value)
         let cocoa = screen.frame
         guard frame.width > 0, frame.height > 0, cocoa.width > 0, cocoa.height > 0 else { return }
@@ -553,12 +603,17 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     @objc private func reportPorchStatus(_ note: Notification) {
         guard let id = note.object as? String, UUID(uuidString: id) != nil else { return }
         let data: [String: Any]
-        if let target = note.userInfo?["playground"] as? String { data = playground.hitPoint(target) }
+        if let x = note.userInfo?["groundX"] as? Double, let y = note.userInfo?["groundY"] as? Double {
+            data = ground.hitPoint(CGPoint(x:x,y:y))
+        } else if let target = note.userInfo?["playground"] as? String { data = playground.hitPoint(target) }
         else if note.userInfo?["hitPoint"] as? Bool == true { data = doors.testPoint(office: note.userInfo?["office"] as? Bool == true) }
         else {
             let display = activeScreen.flatMap(screenID) ?? backgrounds.keys.first ?? 0
             let game = playground.state(on:display)
-            data = ["playgroundTargets":playground.count,"playgroundInputs":playground.actions,
+            let free = groundStates[display] ?? [:]
+            data = ["groundFinderMapped":ground.finderMapped,"groundPassiveInputs":ground.passiveInputs,"groundObserving":ground.observing,"groundInputs":ground.gestures,"groundActive":free["groundActive"] as? Bool ?? false,
+                    "groundSnowmen":free["snowmen"] as? Int ?? 0,"groundFight":free["fightActive"] as? Bool ?? false,
+                    "groundShots":free["shots"] as? Int ?? 0,"groundReturns":free["returns"] as? Int ?? 0,"playgroundTargets":playground.count,"playgroundInputs":playground.actions,
                        "playgroundStage":game["stage"] as? Int ?? 0,"playgroundThrows":game["throws"] as? Int ?? 0,
                        "playgroundMode":["idle":0,"fight":1,"plow":2,"results":3][game["mode"] as? String ?? "idle"] ?? 0,
                        "playgroundIncoming":game["incoming"] as? Bool ?? false,
@@ -573,15 +628,24 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
                                                                    userInfo:data, deliverImmediately:true)
     }
 
-    private func makeView(surface: String) -> WKWebView {
+    private func groundDisplayKey(_ display: NSNumber?) -> String {
+        let number = display?.uint32Value ?? CGMainDisplayID()
+        return CGDisplayCreateUUIDFromDisplayID(number).map {
+            CFUUIDCreateString(nil,$0.takeRetainedValue()) as String
+        } ?? String(number)
+    }
+
+    private func makeView(surface: String, display: NSNumber? = nil) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = store
         let controller = config.userContentController
         controller.add(self, name: "snowfallWindow")
+        let groundKey = groundDisplayKey(display)
         var startup = """
         window.snowfallNative = true;
         window.snowfallSupportsDesktopWidgets = \(ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 14 ? "true" : "false");
         window.snowfallSurface = '\(surface)';
+        window.snowfallGroundDisplay = '\(groundKey)';
         const markSurface = () => document.documentElement?.setAttribute('data-surface', window.snowfallSurface);
         if (document.documentElement) markSurface();
         else {
@@ -626,6 +690,9 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         let live = Set(NSScreen.screens.compactMap(screenID))
         for id in Array(backgrounds.keys) where !live.contains(id) {
             playground.clear(id)
+            ground.cancel()
+            groundStates.removeValue(forKey:id)
+            ground.setFighting(false, display:id)
             if let dropped = backgrounds.removeValue(forKey: id) {
                 stop(dropped.view)
                 dropped.window.close()
@@ -650,7 +717,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
             window.animationBehavior = .none
             window.setFrame(screen.frame, display: false)
             if smokeTest { window.alphaValue = 0 }
-            let view = makeView(surface: "wallpaper")
+            let view = makeView(surface: "wallpaper", display:id)
             window.contentView = view
             backgrounds[id] = Background(window: window, view: view)
             load(view)
@@ -708,7 +775,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         window.delegate = self
         window.center()
         if !smokeTest { _ = window.setFrameUsingName("SnowfallPreview") }
-        let view = makeView(surface: "preview")
+        let view = makeView(surface: "preview", display:window.screen.flatMap(screenID))
         window.contentView = view
         preview = window
         previewView = view
@@ -734,6 +801,20 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         }
         view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-house-plots', {detail: plots}));",
                                  arguments:["plots":ink], in:nil, in:.page)
+    }
+
+    private func syncPreviewGroundDisplay() {
+        guard previewReady, let view = previewView, let screen = preview?.screen,
+              let id = screenID(screen) else { return }
+        let key = groundDisplayKey(id)
+        guard previewGroundKey != key else { return }
+        previewGroundKey = key
+        view.callAsyncJavaScript("window.dispatchEvent(new CustomEvent('snowfall-ground-display',{detail:key}));",
+            arguments:["key":key],in:nil,in:.page)
+    }
+
+    func windowDidChangeScreen(_ notification: Notification) {
+        if notification.object as? NSWindow === preview { syncPreviewGroundDisplay() }
     }
 
     func windowDidResize(_ notification: Notification) {
@@ -820,6 +901,7 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         porches.stop()
         doors.stop()
         playground.stop()
+        ground.stop()
         fightClock?.invalidate()
         clockPulse?.invalidate()
         NSWorkspace.shared.notificationCenter.removeObserver(self,name:NSWorkspace.didWakeNotification,object:nil)
@@ -839,6 +921,16 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
         guard message.name == "snowfallWindow", let sender = message.webView,
               message.frameInfo.isMainFrame,
               message.frameInfo.request.url?.standardizedFileURL == webRoot.appendingPathComponent("index.html").standardizedFileURL else { return }
+        if let info = message.body as? [String:Any], info["action"] as? String == "freeSnowState" {
+            guard !ending, let display = backgrounds.first(where:{ $0.value.view === sender })?.key,
+                  let state = info["state"] as? [String:Any] else { return }
+            let activeBefore = groundStates[display]?["groundActive"] as? Bool
+            groundStates[display] = state
+            if activeBefore != state["groundActive"] as? Bool, !smokeTest || freeSnowCheck { ground.syncReceivers(testing:smokeTest) }
+            ground.setFighting(state["fightActive"] as? Bool == true,display:display)
+            syncFightClock()
+            return
+        }
         if let layout = message.body as? [String:Any], layout["action"] as? String == "playgroundLayout" {
             guard !ending, let display = backgrounds.first(where: { $0.value.ready && $0.value.view === sender })?.key,
                   let screen = NSScreen.screens.first(where: { screenID($0) == display }) else { return }
@@ -937,6 +1029,8 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private func finishSurface(_ webView: WKWebView) {
         if webView === previewView {
             previewReady = true
+            previewGroundKey = nil
+            syncPreviewGroundDisplay()
             sendFiles(to: webView)
             routePreview()
             return
@@ -973,6 +1067,9 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         if let id = backgrounds.first(where:{ $0.value.view === webView })?.key {
             backgrounds[id]?.ready = false
+            ground.cancel()
+            groundStates.removeValue(forKey:id)
+            ground.setFighting(false, display:id)
             playground.clear(id)
         }
         load(webView)
@@ -981,6 +1078,11 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
     private func inspectBackgrounds() {
         guard !smokeBegan, !backgrounds.isEmpty, backgrounds.values.allSatisfy({ $0.ready }) else { return }
         smokeBegan = true
+        if freeSnowCheck {
+            guard let screen = activeScreen, let display = screenID(screen) else { fail("Missing display for open-snow check."); return }
+            Task { @MainActor in await self.checkFreeSnow(display) }
+            return
+        }
         if playgroundCheck {
             guard let screen = activeScreen, let display = screenID(screen) else { fail("Missing display for playground check."); return }
             Task { @MainActor in await self.checkPlayground(display) }
@@ -1033,6 +1135,57 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
 
     /// Check native first-click delivery, all three illustrated activities, and a
     /// return to the idle scene using an isolated WebKit store and actual panels.
+    private func checkFreeSnow(_ display: NSNumber) async {
+        func wait(_ check: () -> Bool) async -> Bool {
+            let until = Date().addingTimeInterval(5)
+            repeat {
+                if check() { return true }
+                try? await Task.sleep(nanoseconds:30_000_000)
+            } while Date() < until
+            return check()
+        }
+        guard await wait({ self.groundSurfaces().contains(where:{$0.id == display}) && self.playground.count >= 3 }),
+              let surface = groundSurfaces().first(where:{$0.id == display}), let window = backgrounds[display]?.window else {
+            fail("No native open-snow surface or station regions."); return
+        }
+        let a = CGPoint(x:0.18,y:0.34), b = CGPoint(x:0.76,y:0.49)
+        func send(_ type: NSEvent.EventType, _ point: CGPoint, flags: NSEvent.ModifierFlags = [], desktop: Bool = true) {
+            _ = ground.checkEvent(type,point:point,surface:surface,window:window,modifiers:flags,desktop:desktop)
+        }
+        func number(_ key: String) -> Int { groundStates[display]?[key] as? Int ?? -1 }
+        func yes(_ key: String) -> Bool { groundStates[display]?[key] as? Bool == true }
+        func at(_ p: CGPoint) -> Bool {
+            guard let x = groundStates[display]?["lastX"] as? Double, let y = groundStates[display]?["lastY"] as? Double else { return false }
+            return abs(x-p.x)<0.002 && abs(y-p.y)<0.002
+        }
+        let initial = ground.gestures
+        send(.leftMouseDown,a,flags:.control)
+        send(.leftMouseDown,a,desktop:false)
+        guard let block = surface.blocked.first(where: { surface.usable.contains(CGPoint(x:$0.midX,y:$0.midY)) }) else {fail("No painted control to protect.");return}
+        let blocked = CGPoint(x:(block.midX-surface.frame.minX)/surface.frame.width,y:(block.midY-surface.frame.minY)/surface.frame.height)
+        send(.leftMouseDown,blocked)
+        guard ground.gestures == initial else {fail("Open snow accepted a modified, covered or painted-control click.");return}
+        send(.leftMouseDown,a)
+        guard await wait({yes("holding") && number("holdStage") == 3}) else {fail("Holding at the first spot did not pack all three stages.");return}
+        send(.leftMouseUp,a)
+        guard await wait({number("snowmen") == 1 && !yes("holding") && at(a)}) else {fail("The first snowman missed its location.");return}
+        send(.leftMouseDown,b)
+        guard await wait({number("holdStage") == 3}) else {fail("The second spot could not build a snowman.");return}
+        send(.leftMouseUp,b)
+        guard await wait({number("snowmen") == 2 && at(b)}) else {fail("Both locally positioned friends were not retained.");return}
+        let c = CGPoint(x:0.51,y:0.55)
+        send(.leftMouseDown,c)
+        send(.leftMouseDragged,CGPoint(x:c.x,y:-0.02))
+        guard await wait({!yes("holding")}) else {fail("Dragging out of the wallpaper failed to cancel the hold.");return}
+        send(.leftMouseDown,c)
+        send(.leftMouseUp,c)
+        guard await wait({yes("fightActive") && number("shots") >= 1 && at(c)}),
+              await wait({number("returns") >= 1}) else {fail("A tap on open snow did not start a returning snowball fight.");return}
+        smokeDeadline?.invalidate()
+        print("PASS: native open-snow mouse events built at two separate coordinates, started a fight at a third, received an automatic return and excluded modified, covered and occupied ground.")
+        NSApp.terminate(nil)
+    }
+
     private func checkPlayground(_ display: NSNumber) async {
         func wait(_ matches: () -> Bool) async -> Bool {
             let limit = Date().addingTimeInterval(6)
@@ -1238,6 +1391,10 @@ private final class CabinApp: NSObject, NSApplicationDelegate, NSWindowDelegate,
 @main
 private enum Snowfall {
     @MainActor static func main() {
+        if let i = CommandLine.arguments.firstIndex(of:"--ground-hitpoint"), i+2 < CommandLine.arguments.count,
+           let x = Double(CommandLine.arguments[i+1]), let y = Double(CommandLine.arguments[i+2]), (0...1).contains(x), (0...1).contains(y) {
+            exit(DesktopHouseInteraction.printSessionStatus(hitPoint:true,ground:CGPoint(x:x,y:y)))
+        }
         if let index = CommandLine.arguments.firstIndex(of:"--playground-hitpoint"), index+1 < CommandLine.arguments.count {
             exit(DesktopHouseInteraction.printSessionStatus(hitPoint:true, playground:CommandLine.arguments[index+1]))
         }

@@ -6,28 +6,33 @@
   <meta name="theme-color" content="#324b65">
   <meta name="description" content="An alpine winter wallpaper for Mac. Watch the snow fall, build a snowman, and send a little plow through fresh powder.">
   <title>Snowfall · Frostpine Hollow</title>
-  <link rel="icon" href="assets/cabin-icon.png?v=6.0.0">
-  <link rel="preload" as="image" href="assets/scene.jpg?v=6.0.0">
-  <link rel="stylesheet" href="desktop.css?v=6.0.0">
-  <link rel="stylesheet" href="apps.css?v=6.0.0">
-  <link rel="stylesheet" href="radio.css?v=6.0.0">
-  <link rel="stylesheet" href="yard.css?v=6.0.0">
-  <script defer src="apps.js?v=6.0.0"></script>
-  <script defer src="radio.js?v=6.0.0"></script>
-  <script defer src="yard.js?v=6.0.0"></script>
-  <link rel="stylesheet" href="rooms.css?v=6.0.0">
-  <link rel="stylesheet" href="post-office.css?v=6.0.0">
-  <script defer src="rooms.js?v=6.0.0"></script>
-  <script defer src="porch.js?v=6.0.0"></script>
-  <script defer src="widget-eaves.js?v=6.0.0"></script>
-  <script defer src="post-office.js?v=6.0.0"></script>
-  <script defer src="desktop.js?v=6.0.0"></script>
-  <link rel="stylesheet" href="snow-playground.css?v=6.0.0">
-  <script defer src="snow-playground.js?v=6.0.0"></script>
+  <link rel="icon" href="assets/cabin-icon.png?v=7.0.0">
+  <link rel="preload" as="image" href="assets/scene.jpg?v=7.0.0">
+  <link rel="stylesheet" href="desktop.css?v=7.0.0">
+  <link rel="stylesheet" href="apps.css?v=7.0.0">
+  <link rel="stylesheet" href="radio.css?v=7.0.0">
+  <link rel="stylesheet" href="yard.css?v=7.0.0">
+  <script defer src="apps.js?v=7.0.0"></script>
+  <script defer src="radio.js?v=7.0.0"></script>
+  <script defer src="yard.js?v=7.0.0"></script>
+  <link rel="stylesheet" href="rooms.css?v=7.0.0">
+  <link rel="stylesheet" href="post-office.css?v=7.0.0">
+  <script defer src="rooms.js?v=7.0.0"></script>
+  <script defer src="porch.js?v=7.0.0"></script>
+  <script defer src="widget-eaves.js?v=7.0.0"></script>
+  <script defer src="post-office.js?v=7.0.0"></script>
+  <script defer src="desktop.js?v=7.0.0"></script>
+  <link rel="stylesheet" href="snow-playground.css?v=7.0.0">
+  <script defer src="snow-playground.js?v=7.0.0"></script>
+  <link rel="stylesheet" href="free-snow.css?v=7.0.0">
+  <script defer src="free-snow.js?v=7.0.0"></script>
+  <link rel="stylesheet" href="village-life.css?v=7.0.0">
+  <script defer src="village-life.js?v=7.0.0"></script>
 </head>
 <body>
-  <main id="scene" aria-label="Frostpine Hollow winter landscape">
-    <img id="wallpaper" src="assets/scene.jpg?v=6.0.0" draggable="false" alt="A winter valley at sunset. A postal house and clock tower overlook four winding streets, a frozen skating pond and a fox beside the creek.">
+  <main id="scene" tabindex="0" aria-label="Frostpine Hollow winter landscape" aria-describedby="snow-gesture-help">
+    <span class="sr-only" id="snow-gesture-help">Click open scenery to throw a snowball. Hold to build a snowman. With the landscape focused, use the arrow keys to move and tap or hold Space to play.</span>
+    <img id="wallpaper" src="assets/scene.jpg?v=7.0.0" draggable="false" alt="A winter valley at sunset. A postal house and clock tower overlook four winding streets, a frozen skating pond and a fox beside the creek.">
     <div id="snow" aria-hidden="true"></div>
     <canvas id="widget-eaves" aria-hidden="true" width="1" height="1"></canvas>
     <div id="wallpaper-cottages" aria-hidden="true"></div>
@@ -40,6 +45,7 @@
       <span class="date-leaf" aria-hidden="true"><span class="leaf-month"></span><span class="leaf-date"></span></span>
       <span class="clock-almanac"><span id="village-day"></span><time id="village-time"></time></span>
     </button>
+    <div id="free-snow"></div>
     <div id="porch-play" hidden></div>
     <div id="yard-stage" aria-label="Snow yard"></div>
     <section id="snow-playground" aria-label="Village snow playground"></section>

@@ -15,6 +15,9 @@ import AppKit
 
     private var lastError: String?
     private var updating = false
+    private(set) var waitingForAccess = false
+    private var requestedWhileWaiting: (() -> Void)?
+    var canCompose: Bool { !waitingForAccess && (lastError == nil || !model.houses.isEmpty) }
 
     init(desktop: URL? = nil, storage: URL? = nil, assets: URL) {
         model = FolderVillage(desktop: desktop, storage: storage, assets: assets)
@@ -31,7 +34,7 @@ import AppKit
 
     var state: [String: Any] {
         let houses: [[String: Any]] = model.houses.map { ["id": $0.id, "name": $0.name, "variant": $0.variant] }
-        var result: [String: Any] = ["enabled": model.enabled, "houses": houses]
+        var result: [String: Any] = ["enabled": model.enabled, "houses": houses, "loading": waitingForAccess]
         if let lastError = lastError { result["error"] = lastError }
         return result
     }
@@ -51,8 +54,27 @@ import AppKit
     }
 
     func start(applyRequested: Bool) {
-        if applyRequested { apply(nil) }
-        else if model.enabled { perform({ try model.refresh() }, alertOnFailure: true) }
+        guard applyRequested || model.enabled else { return }
+        waitingForAccess = true
+        // macOS can pause this read while its Desktop consent dialog is open.
+        // Keep the run loop available for the wallpaper and its snow gestures.
+        let directory = model.desktop
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let permission = Result { _ = try FileManager.default.contentsOfDirectory(atPath: directory.path) }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.waitingForAccess = false
+                let requested = self.requestedWhileWaiting
+                self.requestedWhileWaiting = nil
+                switch permission {
+                case .failure(let error): self.record(error)
+                case .success:
+                    if let requested { requested() }
+                    else if applyRequested { self.apply(nil) }
+                    else { self.perform({ try self.model.refresh() }, alertOnFailure: false) }
+                }
+            }
+        }
     }
 
     func list() {
@@ -63,12 +85,18 @@ import AppKit
     // The picker can request a fresh view of styled folders. Fresh installs
     // stay opt-in and never enumerate the Desktop merely to draw the menu.
     @objc func pick(_ sender: Any?) {
-        if model.enabled { perform({ try model.inspect() }, alertOnFailure: false) }
+        if model.enabled && !waitingForAccess { perform({ try model.inspect() }, alertOnFailure: false) }
         openPicker?()
     }
 
-    @objc func apply(_ sender: Any?) { perform({ try model.apply() }, alertOnFailure: true) }
-    @objc func restore(_ sender: Any?) { perform({ try model.restore() }, alertOnFailure: true) }
+    @objc func apply(_ sender: Any?) {
+        if waitingForAccess { requestedWhileWaiting = { [weak self] in self?.apply(nil) }; return }
+        perform({ try model.apply() }, alertOnFailure: true)
+    }
+    @objc func restore(_ sender: Any?) {
+        if waitingForAccess { requestedWhileWaiting = { [weak self] in self?.restore(nil) }; return }
+        perform({ try model.restore() }, alertOnFailure: true)
+    }
 
     func openFolder(id: String) {
         guard let house = model.houses.first(where: { $0.id == id }), model.currentHouse(at: house.url)?.id == id else { return }

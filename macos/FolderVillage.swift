@@ -52,7 +52,7 @@ final class FolderVillage: NSObject {
     var onChange: (() -> Void)?
     var onError: ((Error) -> Void)?
 
-    private let desktop: URL
+    let desktop: URL
     private let storage: URL
     private let assets: URL
     private var ledger = Ledger()

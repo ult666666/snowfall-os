@@ -74,6 +74,14 @@ struct VillageComposition: Decodable {
         return nil
     }
 
+    /// Keep the roof and the painted address sign within the same clickable plot.
+    static func cottageBounds(center: CGPoint, size: CGFloat, viewportWidth: CGFloat) -> CGRect {
+        let plaqueWidth = viewportWidth >= 1000 ? min(158, max(106, size + 28)) : min(132, max(78, size + 14))
+        let width = max(size, plaqueWidth)
+        let height = max(size, size * 0.86 + 20)
+        return CGRect(x: center.x - width/2, y: center.y - size/2, width: width, height: height)
+    }
+
     /// Pack in art coordinates first. On cropped displays, fill visible stretches of
     /// the same terrain before resorting to the folder directory in the menu bar.
     func plots(ids: [String], display: CGDirectDisplayID, frame: CGRect,
@@ -88,7 +96,7 @@ struct VillageComposition: Decodable {
         let names = ids.sorted()
         func place(_ id: String, ground: CGPoint, size: CGFloat) -> Bool {
             let center = CGPoint(x: ground.x, y: ground.y - size * 0.38)
-            let box = CGRect(x: center.x - size/2, y: center.y - size/2, width: size, height: size)
+            let box = Self.cottageBounds(center: center, size: size, viewportWidth: frame.width)
             guard bounds.contains(box), !obstacles.contains(where: { $0.intersects(box) }) else { return false }
             obstacles.append(box.insetBy(dx: -4, dy: -2))
             placed.append(.init(id: id, center: center, size: size, display: display, frame: frame))
@@ -136,8 +144,9 @@ struct VillageComposition: Decodable {
             let depth = CGFloat(row) / 6
             let feetY = horizon + (bottom - horizon) * depth
             let side = max(36, min(66, frame.width * 0.043 + 12 * depth))
-            let span = side * 1.40
-            var x = bounds.minX + side * 0.55 + (row.isMultiple(of: 2) ? 0 : span/2)
+            let boxWidth = Self.cottageBounds(center: .zero, size: side, viewportWidth: frame.width).width
+            let span = max(side * 1.40, boxWidth + 9)
+            var x = bounds.minX + boxWidth/2 + (row.isMultiple(of: 2) ? 0 : span/2)
             while x < bounds.maxX && next < waiting.count {
                 let bend = sin((x - frame.minX) / frame.width * 3 * .pi + depth) * side * 0.17
                 if place(waiting[next], ground: CGPoint(x: x, y: feetY + bend), size: side) { next += 1 }

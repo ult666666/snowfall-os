@@ -54,7 +54,7 @@
     node.addEventListener('click',click);
     return node;
   }
-  const imgPath = variant => 'assets/houses/cottage-'+variant+'.png?v=6.0.0';
+  const imgPath = variant => 'assets/houses/cottage-'+variant+'.png?v=7.0.0';
   function art(house) {
     const node=el('img','room-cottage');
     node.alt=''; node.draggable=false; node.src=imgPath(house.variant);
@@ -179,7 +179,7 @@
       const data=event.detail;
       if (!native || !data || typeof data !== 'object') return;
       const previousCatalog=catalog, previousEnabled=enabled, previousError=error, wasReceived=received;
-      received=true; enabled=!!data.enabled; error=typeof data.error==='string' ? data.error : '';
+      received=!data.loading; enabled=!!data.enabled; error=typeof data.error==='string' ? data.error : '';
       if (Array.isArray(data.houses)) catalog=housesFrom(data.houses);
       if (pendingId && catalog.has(pendingId)) { showRoom(catalog.get(pendingId)); return; }
       if (selected) {
@@ -187,7 +187,7 @@
         if (available) selected=catalog.get(selected.id);
         updateHeader(); return;
       }
-      const changed=!wasReceived || previousError!==error || previousEnabled!==enabled || JSON.stringify([...previousCatalog])!==JSON.stringify([...catalog]);
+      const changed=wasReceived!==received || previousError!==error || previousEnabled!==enabled || JSON.stringify([...previousCatalog])!==JSON.stringify([...catalog]);
       if (changed) {
         const requested=pendingId;
         const focusedId=document.activeElement?.dataset?.houseId;
